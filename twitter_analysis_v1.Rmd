@@ -1,0 +1,197 @@
+---
+title: "Twitter Analysis"
+author: "David Rodriguez"
+date: "February 24, 2016"
+output: html_document
+---
+
+## Introduction
+
+Twitter is a powerful two-edged tool that enables users to communicate with others and also empowers data scientists with large quantities of data they can use.
+
+## Experiment Setup
+
+Load up required packages:
+```{r message=F, warning=F}
+library(twitteR)
+library(tm)
+library(rjson)
+library(wordcloud)
+library(dplyr)
+library(caret)
+```
+
+Read in my application credentials:
+```{r}
+secrets <- fromJSON(file='twitter_secrets.json.nogit')
+
+setup_twitter_oauth(secrets$api_key,
+                    secrets$api_secret,
+                    secrets$access_token,
+                    secrets$access_token_secret)
+```
+
+Perform a twitter search and extract the information we want:
+```{r}
+searchstring <- 'python'
+numtweets <- 1000
+st <- searchTwitter(searchstring, n=numtweets, resultType = 'recent', lang = 'en')
+
+st_text <- sapply(st, function(x) x$getText())
+st_user <- sapply(st, function(x) x$getScreenName())
+st_rts <- sapply(st, function(x) x$isRetweet)
+st_lat <- sapply(st, function(x) as.numeric(x$latitude[1]))
+st_lon <- sapply(st, function(x) as.numeric(x$longitude[1]))
+st_time <- sapply(st, function(x) format(x$created, format='%F %T'))
+
+statuses <- data.frame('text'=st_text, 'user'=st_user, 'RT'=st_rts,
+                       'latitude'=st_lat, 'longitude'=st_lon,
+                       'time'=st_time)
+```
+
+Remove retweets for clarity:
+```{r}
+statuses <-
+    statuses %>%
+    filter(!RT)
+```
+
+Total number of tweets to process is now `r nrow(statuses)`
+
+Save these tweets for later use:
+```{r}
+saveRDS(statuses, file='tweet_data.Rda')
+# Can reload with statuses <- readRDS(file='tweet_data.Rda')
+```
+
+
+## Text Analysis
+
+Gather the tweets:
+```{r}
+textdata <- Corpus(VectorSource(statuses$text))
+
+textdata <- tm_map(textdata, stripWhitespace, mc.cores=1)
+textdata <- tm_map(textdata, removeWords, stopwords("english"), mc.cores=1)
+textdata <- tm_map(textdata, removePunctuation, mc.cores=1)
+textdata <- tm_map(textdata, 
+                   content_transformer(function(x) iconv(x, to='UTF-8-MAC', sub='byte')),
+                   mc.cores=1)
+textdata <- tm_map(textdata, content_transformer(tolower), mc.cores=1)
+```
+
+A quick wordcloud:
+```{r}
+wordcloud(textdata, max.words = 100)
+```
+
+Further processing to get word counts:
+```{r message=F, results='hide'}
+dtm <- DocumentTermMatrix(textdata)
+dtm <- inspect(dtm)
+
+words <- data.frame(term = colnames(dtm))
+words$count <- colSums(dtm)
+```
+
+Sort in descending order:
+```{r}
+words <-
+    words %>%
+    arrange(desc(count))
+head(words)
+```
+
+Convert tweets to data frame:
+```{r}
+tweets <- as.data.frame(dtm)
+ind <- data.frame('id'=seq.int(nrow(tweets)))
+tweets <- cbind(ind, tweets)
+```
+
+Select only the top 100 words (not the search term) to process:
+```{r}
+words_100 <- as.character(words[2:101,'term'])
+```
+
+Use only those variables to process the tweets:
+```{r}
+tweets <- tweets[,c('id',words_100)]
+head(tweets[,1:10])
+```
+
+## PCA
+
+Perform a principal component analysis on the tweet data set:
+```{r}
+trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
+pca <- predict(trans, tweets[,2:ncol(tweets)])
+#pca <- cbind(id=tweets[,1], pca)
+```
+
+Examine reprojected data
+```{r}
+ggplot(pca, aes(x=PC1, y=PC2)) + 
+    geom_point() +
+    theme_bw()
+```
+
+Look at loading factors:
+```{r}
+loadings <- trans$rotation 
+load_sqr <- loadings^2
+
+load_sqr <- data.frame(load_sqr)
+temp <- data.frame('term'=rownames(load_sqr))
+load_sqr <- cbind(temp, load_sqr)
+load_sqr %>%
+    select(term, PC1) %>%
+    arrange(desc(PC1)) %>%
+    head(10)
+
+load_sqr %>%
+    select(term, PC2) %>%
+    arrange(desc(PC2)) %>%
+    head(10)
+```
+
+Join the PCA information to the original status array:
+```{r}
+statuses <- cbind(statuses, pca)
+```
+
+I can now examine the tweets based on where they fall in principal component space.
+
+Here are the top 5 PC1 tweets:
+```{r}
+statuses %>%
+    arrange(desc(PC1)) %>%
+    select(PC1, text) %>%
+    head(5)
+```
+
+Here are the bottom 5 PC1 tweets:
+```{r}
+statuses %>%
+    arrange(PC1) %>%
+    select(PC1, text) %>%
+    head(5)
+```
+
+Similarly for PC2, we have:
+```{r}
+statuses %>%
+    arrange(desc(PC2)) %>%
+    select(PC2, text) %>%
+    head(5)
+```
+
+And:
+```{r}
+statuses %>%
+    arrange(PC2) %>%
+    select(PC2, text) %>%
+    head(5)
+```
+
+## Data Prediction
