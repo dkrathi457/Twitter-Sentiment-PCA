@@ -19,10 +19,11 @@ library(rjson)
 library(wordcloud)
 library(dplyr)
 library(caret)
+library(knitr)
 ```
 
 Read in my application credentials:
-```{r}
+```{r eval=FALSE}
 secrets <- fromJSON(file='twitter_secrets.json.nogit')
 
 setup_twitter_oauth(secrets$api_key,
@@ -32,7 +33,7 @@ setup_twitter_oauth(secrets$api_key,
 ```
 
 Perform a twitter search and extract the information we want:
-```{r}
+```{r eval=F}
 searchstring <- 'python'
 numtweets <- 1000
 st <- searchTwitter(searchstring, n=numtweets, resultType = 'recent', lang = 'en')
@@ -50,25 +51,24 @@ statuses <- data.frame('text'=st_text, 'user'=st_user, 'RT'=st_rts,
 ```
 
 Remove retweets for clarity:
-```{r}
+```{r eval=F}
 statuses <-
     statuses %>%
     filter(!RT)
 ```
 
-Total number of tweets to process is now `r nrow(statuses)`
-
-Save these tweets for later use:
-```{r}
-saveRDS(statuses, file='tweet_data.Rda')
-# Can reload with statuses <- readRDS(file='tweet_data.Rda')
+To save time, we'll load up saved tweets:
+```{r loadtweets}
+#saveRDS(statuses, file='tweet_data.Rda')
+statuses <- readRDS(file='tweet_data.Rda')
 ```
 
+Total number of tweets to process is `r nrow(statuses)`
 
 ## Text Analysis
 
 Gather the tweets:
-```{r}
+```{r gathercorpus}
 textdata <- Corpus(VectorSource(statuses$text))
 
 textdata <- tm_map(textdata, stripWhitespace, mc.cores=1)
@@ -86,7 +86,7 @@ wordcloud(textdata, max.words = 100)
 ```
 
 Further processing to get word counts:
-```{r message=F, results='hide'}
+```{r termmatrix, message=F, results='hide'}
 dtm <- DocumentTermMatrix(textdata)
 dtm <- inspect(dtm)
 
@@ -107,6 +107,7 @@ Convert tweets to data frame:
 tweets <- as.data.frame(dtm)
 ind <- data.frame('id'=seq.int(nrow(tweets)))
 tweets <- cbind(ind, tweets)
+rm(dtm, textdata) # clearing up memory
 ```
 
 Select only the top 100 words (not the search term) to process:
@@ -123,16 +124,15 @@ head(tweets[,1:10])
 ## PCA
 
 Perform a principal component analysis on the tweet data set:
-```{r}
+```{r runpca}
 trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
 pca <- predict(trans, tweets[,2:ncol(tweets)])
-#pca <- cbind(id=tweets[,1], pca)
 ```
 
 Examine reprojected data
 ```{r}
 ggplot(pca, aes(x=PC1, y=PC2)) + 
-    geom_point() +
+    geom_point(color='dark blue') +
     theme_bw()
 ```
 
@@ -155,43 +155,40 @@ load_sqr %>%
     head(10)
 ```
 
-Join the PCA information to the original status array:
+Join the PCA information (first five components) to the original status array:
 ```{r}
-statuses <- cbind(statuses, pca)
+statuses <- cbind(statuses, pca[,1:5])
 ```
 
 I can now examine the tweets based on where they fall in principal component space.
 
-Here are the top 5 PC1 tweets:
+I've created a function to sample tweets across the PC spectrum.
 ```{r}
-statuses %>%
-    arrange(desc(PC1)) %>%
-    select(PC1, text) %>%
-    head(5)
+set.seed(42)
+tweet_check <- function(text, pc, numbreaks=5){
+    cuts <- cut(pc, numbreaks)
+    temp <- data.frame(text=text, pc=pc, pc_val=cuts)
+    temp <- temp %>%
+        group_by(pc_val) %>%
+        summarise(text=sample(text,1))
+    return(temp)
+}
 ```
 
-Here are the bottom 5 PC1 tweets:
+Here are the results for PC1:
 ```{r}
-statuses %>%
-    arrange(PC1) %>%
-    select(PC1, text) %>%
-    head(5)
+tweet_check(statuses$text, statuses$PC1, 10) %>% kable(format='html')
 ```
 
-Similarly for PC2, we have:
+And here are the results for PC2:
 ```{r}
-statuses %>%
-    arrange(desc(PC2)) %>%
-    select(PC2, text) %>%
-    head(5)
+tweet_check(statuses$text, statuses$PC2, 10) %>% kable(format='html')
 ```
 
-And:
+Saving the processed tweets to continue work elsewhere:
 ```{r}
-statuses %>%
-    arrange(PC2) %>%
-    select(PC2, text) %>%
-    head(5)
+saveRDS(statuses, file='proc_tweets.Rda')
 ```
+
 
 ## Data Prediction
