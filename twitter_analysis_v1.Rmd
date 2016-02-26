@@ -60,7 +60,7 @@ statuses <-
 To save time, we'll load up saved tweets:
 ```{r loadtweets}
 #saveRDS(statuses, file='tweet_data.Rda')
-statuses <- readRDS(file='tweet_data.Rda')
+statuses <- readRDS(file='data/tweet_data.Rda')
 ```
 
 Total number of tweets to process is `r nrow(statuses)`
@@ -180,14 +180,16 @@ Here are the results for PC1:
 tweet_check(statuses$text, statuses$PC1, 10) %>% kable(format='html')
 ```
 
+
 And here are the results for PC2:
 ```{r}
 tweet_check(statuses$text, statuses$PC2, 10) %>% kable(format='html')
 ```
 
+
 Saving the processed tweets to continue work elsewhere:
 ```{r}
-saveRDS(statuses, file='proc_tweets.Rda')
+saveRDS(statuses, file='data/proc_tweets.Rda')
 ```
 
 

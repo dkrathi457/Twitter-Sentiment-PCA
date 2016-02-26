@@ -30,4 +30,4 @@ statuses <-
     filter(!RT)
 
 # Save tweets
-saveRDS(statuses, file='tweet_data.Rda')
+saveRDS(statuses, file='data/tweet_data.Rda')
