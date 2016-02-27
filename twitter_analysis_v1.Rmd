@@ -20,6 +20,7 @@ library(wordcloud)
 library(dplyr)
 library(caret)
 library(knitr)
+library(RColorBrewer)
 ```
 
 Read in my application credentials:
@@ -71,18 +72,51 @@ Gather the tweets:
 ```{r gathercorpus}
 textdata <- Corpus(VectorSource(statuses$text))
 
-textdata <- tm_map(textdata, stripWhitespace, mc.cores=1)
-textdata <- tm_map(textdata, removeWords, stopwords("english"), mc.cores=1)
-textdata <- tm_map(textdata, removePunctuation, mc.cores=1)
-textdata <- tm_map(textdata, 
-                   content_transformer(function(x) iconv(x, to='UTF-8-MAC', sub='byte')),
-                   mc.cores=1)
-textdata <- tm_map(textdata, content_transformer(tolower), mc.cores=1)
+textdata <- 
+    textdata %>%
+    tm_map(removeWords, stopwords("english"), mc.cores=1) %>%
+    tm_map(removePunctuation, mc.cores=1) %>%
+    tm_map(content_transformer(function(x) iconv(x, to='UTF-8-MAC', sub='byte')),
+           mc.cores=1) %>%
+    tm_map(content_transformer(tolower), mc.cores=1) %>%
+    tm_map(removeNumbers, mc.cores=1) %>%
+    tm_map(removeWords, c('trump','realdonaldtrump'), mc.cores=1) %>%
+    tm_map(stripWhitespace, mc.cores=1)
+
+#str_replace_all(tweets$text, "@\\w+", "") # removing twitter handles
 ```
+
+```{r eval=F}
+library("RWeka")
+#NGramTokenizer(textdata, Weka_control(min = 2, max = 3))
+
+#create fucntion to send to TermDocumentMatrix
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 3))
+options(mc.cores=1)
+tdm <- TermDocumentMatrix(textdata, control = list(tokenize = BigramTokenizer))
+
+inspect(tdm[1:5,1:3])
+dtm <- DocumentTermMatrix(textdata, control = list(tokenize = BigramTokenizer))
+inspect(head(dtm))
+
+head(findFreqTerms(tdm), 10)
+```
+
+```{r eval=F}
+library(syuzhet)
+
+sentiments <- sapply(textdata, function(x) get_nrc_sentiment(as.character(x[[1]])))
+dim(sentiments)
+
+sentiments2 <- as.data.frame(aperm(sentiments)) # transpose and save as dataframe
+#sentiments2['positivity'] <- sentiments2$positive - sentiments2$negative # not working
+```
+
 
 A quick wordcloud:
 ```{r}
-wordcloud(textdata, max.words = 100)
+pal2 <- brewer.pal(8,"Dark2")
+wordcloud(textdata, max.words = 100, colors= pal2)
 ```
 
 Further processing to get word counts:
