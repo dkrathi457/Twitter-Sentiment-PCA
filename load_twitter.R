@@ -21,7 +21,8 @@ statuses <- data.frame(text=sapply(st, function(x) x$getText()),
                        RT=sapply(st, function(x) x$isRetweet),
                        latitude=sapply(st, function(x) as.numeric(x$latitude[1])),
                        longitude=sapply(st, function(x) as.numeric(x$longitude[1])),
-                       time=sapply(st, function(x) format(x$created, format='%F %T'))
+                       time=sapply(st, function(x) format(x$created, format='%F %T')),
+                       client=sapply(st, function(x) gsub('<(.*?)>', '',x$statusSource))
                        )
 
 # Remove retweets
@@ -30,4 +31,7 @@ statuses <-
     filter(!RT)
 
 # Save tweets
-saveRDS(statuses, file='data/tweet_data.Rda')
+today <- format(Sys.time(), '%Y-%m-%d')
+savename <- paste0('data/tweets_',searchstring,'_',
+                   nrow(statuses),'_',today,'.Rda')
+saveRDS(statuses, file=savename)

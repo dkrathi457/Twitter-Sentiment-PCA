@@ -21,6 +21,8 @@ library(dplyr)
 library(caret)
 library(knitr)
 library(RColorBrewer)
+library(stringr)
+library(syuzhet) # for sentiment analysis
 ```
 
 Read in my application credentials:
@@ -35,20 +37,17 @@ setup_twitter_oauth(secrets$api_key,
 
 Perform a twitter search and extract the information we want:
 ```{r eval=F}
-searchstring <- 'python'
-numtweets <- 1000
+searchstring <- 'politics'
+numtweets <- 10000
 st <- searchTwitter(searchstring, n=numtweets, resultType = 'recent', lang = 'en')
 
-st_text <- sapply(st, function(x) x$getText())
-st_user <- sapply(st, function(x) x$getScreenName())
-st_rts <- sapply(st, function(x) x$isRetweet)
-st_lat <- sapply(st, function(x) as.numeric(x$latitude[1]))
-st_lon <- sapply(st, function(x) as.numeric(x$longitude[1]))
-st_time <- sapply(st, function(x) format(x$created, format='%F %T'))
-
-statuses <- data.frame('text'=st_text, 'user'=st_user, 'RT'=st_rts,
-                       'latitude'=st_lat, 'longitude'=st_lon,
-                       'time'=st_time)
+statuses <- data.frame(text=sapply(st, function(x) x$getText()),
+                       user=sapply(st, function(x) x$getScreenName()),
+                       RT=sapply(st, function(x) x$isRetweet),
+                       latitude=sapply(st, function(x) as.numeric(x$latitude[1])),
+                       longitude=sapply(st, function(x) as.numeric(x$longitude[1])),
+                       time=sapply(st, function(x) format(x$created, format='%F %T'))
+                       )
 ```
 
 Remove retweets for clarity:
@@ -58,10 +57,20 @@ statuses <-
     filter(!RT)
 ```
 
-To save time, we'll load up saved tweets:
-```{r loadtweets}
-#saveRDS(statuses, file='tweet_data.Rda')
-statuses <- readRDS(file='data/tweet_data.Rda')
+Save tweets for future use:
+```{r savetweets, eval=F}
+today <- format(Sys.time(), '%Y-%m-%d')
+savename <- paste0('data/tweets_',searchstring,'_',
+                   nrow(statuses),'_',today,'.Rda')
+saveRDS(statuses, file=savename)
+```
+
+```{r loadtweets, eval=T}
+files <- list.files('data','tweets_')
+files
+selectedfile <- paste0('data/',files[1])
+statuses <- readRDS(file=selectedfile)
+searchstring <- 'politics'
 ```
 
 Total number of tweets to process is `r nrow(statuses)`
@@ -79,11 +88,11 @@ textdata <-
     tm_map(content_transformer(function(x) iconv(x, to='UTF-8-MAC', sub='byte')),
            mc.cores=1) %>%
     tm_map(content_transformer(tolower), mc.cores=1) %>%
+    tm_map(content_transformer(function(x) str_replace_all(x, "@\\w+", "")), 
+           mc.cores=1) %>% # remove twitter handles
     tm_map(removeNumbers, mc.cores=1) %>%
     tm_map(removeWords, c('trump','realdonaldtrump'), mc.cores=1) %>%
     tm_map(stripWhitespace, mc.cores=1)
-
-#str_replace_all(tweets$text, "@\\w+", "") # removing twitter handles
 ```
 
 ```{r eval=F}
@@ -102,16 +111,15 @@ inspect(head(dtm))
 head(findFreqTerms(tdm), 10)
 ```
 
-```{r eval=F}
-library(syuzhet)
+```{r sentiment, eval=T}
+sentiments <- sapply(textdata, function(x) get_nrc_sentiment(as.character(x)))
 
-sentiments <- sapply(textdata, function(x) get_nrc_sentiment(as.character(x[[1]])))
-dim(sentiments)
-
-sentiments2 <- as.data.frame(aperm(sentiments)) # transpose and save as dataframe
-#sentiments2['positivity'] <- sentiments2$positive - sentiments2$negative # not working
+sentiments <- as.data.frame(aperm(sentiments)) # transpose and save as dataframe
+sentiments <- as.data.frame(lapply(sentiments, as.numeric)) # a bit more to organize
+sentiments <-
+    sentiments %>%
+    mutate(positivity = positive - negative)
 ```
-
 
 A quick wordcloud:
 ```{r}
@@ -163,11 +171,14 @@ trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
 pca <- predict(trans, tweets[,2:ncol(tweets)])
 ```
 
+Join the PCA information (first five components) to the original status array.
 Examine reprojected data
 ```{r}
-ggplot(pca, aes(x=PC1, y=PC2)) + 
-    geom_point(color='dark blue') +
-    theme_bw()
+statuses <- cbind(statuses, pca[,1:5], sentiments)
+pal2 <- brewer.pal(10,"RdBu")
+ggplot(statuses, aes(x=PC1, y=PC2)) + 
+    geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
+    scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
 ```
 
 Look at loading factors:
@@ -189,12 +200,6 @@ load_sqr %>%
     head(10)
 ```
 
-Join the PCA information (first five components) to the original status array:
-```{r}
-statuses <- cbind(statuses, pca[,1:5])
-```
-
-I can now examine the tweets based on where they fall in principal component space.
 
 I've created a function to sample tweets across the PC spectrum.
 ```{r}
@@ -204,7 +209,7 @@ tweet_check <- function(text, pc, numbreaks=5){
     temp <- data.frame(text=text, pc=pc, pc_val=cuts)
     temp <- temp %>%
         group_by(pc_val) %>%
-        summarise(text=sample(text,1))
+        summarise(text=iconv(sample(text,1), to='UTF-8-MAC', sub='byte'))
     return(temp)
 }
 ```
@@ -214,16 +219,23 @@ Here are the results for PC1:
 tweet_check(statuses$text, statuses$PC1, 10) %>% kable(format='html')
 ```
 
-
 And here are the results for PC2:
 ```{r}
 tweet_check(statuses$text, statuses$PC2, 10) %>% kable(format='html')
 ```
 
+Finally, let's have a look at tweets grouped by positivity score:
+```{r}
+tweet_check(statuses$text, statuses$positivity, 10) %>% kable(format='html')
+```
+
 
 Saving the processed tweets to continue work elsewhere:
 ```{r}
-saveRDS(statuses, file='data/proc_tweets.Rda')
+today <- format(Sys.time(), '%Y-%m-%d')
+savename <- paste0('data/proc_',searchstring,'_',
+                   nrow(statuses),'_',today,'.Rda')
+saveRDS(statuses, file=savename)
 ```
 
 
