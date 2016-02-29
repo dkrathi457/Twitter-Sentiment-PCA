@@ -1,5 +1,6 @@
 # Load twitter data and save to file
 
+# Load packages
 library(twitteR)
 library(dplyr)
 library(rjson)
@@ -12,7 +13,7 @@ setup_twitter_oauth(secrets$api_key,
                     secrets$access_token_secret)
 
 # Search twitter
-searchstring <- 'trump'
+searchstring <- 'politics'
 numtweets <- 10000
 st <- searchTwitter(searchstring, n=numtweets, resultType = 'recent', lang = 'en')
 

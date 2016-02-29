@@ -1,5 +1,15 @@
 # Process tweets script
 
+# Load packages
+library(tm)
+library(wordcloud)
+library(dplyr)
+library(caret)
+library(knitr)
+library(RColorBrewer)
+library(stringr)
+library(syuzhet) # for sentiment analysis
+
 today <- format(Sys.time(), '%Y-%m-%d')
 searchstring <- 'politics'
 
@@ -99,7 +109,7 @@ load_sqr %>%
     head(10)
 
 # Examine some tweets
-set.seed(42)
+#set.seed(42)
 tweet_check <- function(text, pc, numbreaks=5){
     cuts <- cut(pc, numbreaks)
     temp <- data.frame(text=text, pc=pc, pc_val=cuts)
