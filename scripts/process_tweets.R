@@ -15,9 +15,11 @@ searchstring <- 'microsoft'
 
 # Load tweet file (from load_twitter.R)
 files <- list.files('data',paste0('tweets_',searchstring))
-files
-selectedfile <- paste0('data/',files[1])
-statuses <- readRDS(file=selectedfile)
+#files
+
+# Load one set of tweets
+#selectedfile <- paste0('data/',files[1])
+#statuses <- readRDS(file=selectedfile)
 
 # Read all tweets on the subject
 rm(statuses)
