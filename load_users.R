@@ -8,7 +8,7 @@ library(lubridate)
 
 # Load data
 today <- format(Sys.time(), '%Y-%m-%d')
-searchstring <- 'politics'
+searchstring <- 'microsoft'
 
 # Load tweet file (from process_tweets.R)
 files <- list.files('data',paste0('proc_',searchstring))

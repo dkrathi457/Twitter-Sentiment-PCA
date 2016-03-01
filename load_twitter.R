@@ -13,7 +13,7 @@ setup_twitter_oauth(secrets$api_key,
                     secrets$access_token_secret)
 
 # Search twitter
-searchstring <- 'politics'
+searchstring <- 'microsoft'
 numtweets <- 10000
 st <- searchTwitter(searchstring, n=numtweets, resultType = 'recent', lang = 'en')
 

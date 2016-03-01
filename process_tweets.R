@@ -11,7 +11,7 @@ library(stringr)
 library(syuzhet) # for sentiment analysis
 
 today <- format(Sys.time(), '%Y-%m-%d')
-searchstring <- 'politics'
+searchstring <- 'microsoft'
 
 # Load tweet file (from load_twitter.R)
 files <- list.files('data',paste0('tweets_',searchstring))
@@ -19,6 +19,17 @@ files
 selectedfile <- paste0('data/',files[1])
 statuses <- readRDS(file=selectedfile)
 
+# Read all tweets on the subject
+rm(statuses)
+for(i in 1:length(files)) {
+    selectedfile <- paste0('data/',files[i])
+    print(selectedfile)
+    if(!exists('statuses')){
+        statuses <- readRDS(file=selectedfile)
+    }else{
+        statuses <- rbind(statuses, readRDS(file=selectedfile))
+    }
+}
 
 # Create corpus
 textdata <- Corpus(VectorSource(statuses$text))
