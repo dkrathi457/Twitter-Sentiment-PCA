@@ -16,16 +16,30 @@ alldata <- readRDS(file=selectedfile)
 
 # Select predictor
 choice <- 'PC2'
-possiblepreds <- c('positivity','PC1','PC2','PC3','PC4','PC5')
-colremove <- possiblepreds[sapply(possiblepreds, function(x) x!=choice)]
-col_list <- colnames(alldata)
-final_cols <- col_list[sapply(col_list, function(x) !(x %in% colremove))]
+# Remove columns
+if(T){
+    possiblepreds <- c('positivity','PC1','PC2','PC3','PC4','PC5')
+    colremove <- possiblepreds[sapply(possiblepreds, function(x) x!=choice)]
+    col_list <- colnames(alldata)
+    final_cols <- col_list[sapply(col_list, function(x) !(x %in% colremove))]
+    df <- alldata[final_cols]
+}else{df <- alldata}
 
-df <- alldata[final_cols] %>% 
+df <- df %>% 
     select(-user, -realname) %>%
     mutate(client=as.factor(client))
 
-#df <- df %>% select(-client) #remove client column
+#remove client column, and a few others
+df <- df %>% select(-client) 
+
+# Quick plots
+pal2 <- brewer.pal(10,"RdBu")
+p2 <- ggplot(df, aes(x=PC2, y=PC3)) + 
+    geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
+    scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
+print(p2)
+savefig <- paste0('figures/users_pca2-3_',searchstring,'_',today,'.png')
+ggsave(savefig, plot=p2)
 
 # Remove parameters with near zero variance
 #nzv <- nearZeroVar(df, saveMetrics= TRUE)
@@ -109,7 +123,7 @@ p <- ggplot(data=df_test_all, aes(x=id)) +
     geom_point(aes(y=diff_GLM), color='dark blue', alpha=0.6) + 
     geom_hline(yintercept=c(rmseGLM, -1*rmseGLM), color='dark blue') +
     theme_bw() + coord_cartesian(ylim=c(-4,4)) + 
-    labs(x='Tweet', y='Difference from Model')
+    labs(x='User', y='Difference from Model')
 print(p)
 
 modelSummary

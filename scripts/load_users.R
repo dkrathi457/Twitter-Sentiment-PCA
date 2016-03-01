@@ -29,6 +29,8 @@ allusers <- lookupUsers(userlist)
 
 # Date scince founding of twitter (March 21, 2006)
 twitter_date <- mdy_hm('03-21-2006 9:50 PM PST')
+
+# Gather all the user info in a data frame
 userinfo <- data.frame(user=sapply(allusers, function(x) x$screenName),
                        realname=sapply(allusers, function(x) x$name),
                        numstatuses=sapply(allusers, function(x) x$statusesCount),
@@ -54,7 +56,10 @@ newstatuses <-
               PC3=mean(PC3),
               PC4=mean(PC4),
               PC5=mean(PC5),
-              client=rownames(sort(table(client), decreasing = T))[1]) %>% #most common client
+              client=rownames(sort(table(client), decreasing = T))[1], #most common client
+              anger=mean(anger), anticipation=mean(anticipation), 
+              disgust=mean(disgust), fear=mean(fear), joy=mean(joy),
+              sadness=mean(sadness), surprise=mean(surprise), trust=mean(trust)) %>% 
     mutate(user=as.character(user))
 
 # Join the data together

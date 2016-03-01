@@ -47,6 +47,7 @@ textdata <-
            mc.cores=1) %>% # remove twitter handles
     tm_map(removeNumbers, mc.cores=1) %>%
     tm_map(removeWords, c('trump','realdonaldtrump'), mc.cores=1) %>%
+    tm_map(stemDocument) %>%
     tm_map(stripWhitespace, mc.cores=1)
 
 # Sentiment analysis
@@ -101,7 +102,24 @@ p2 <- ggplot(statuses, aes(x=PC1, y=PC2)) +
     geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
     scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
 print(p2)
-savefig <- paste0('figures/pca_',searchstring,'_',today,'.png')
+savefig <- paste0('figures/pca_1-2_',searchstring,'_',today,'.png')
+ggsave(savefig, plot=p2)
+
+pal2 <- brewer.pal(10,"RdBu")
+p2 <- ggplot(statuses, aes(x=PC2, y=PC3)) + 
+    geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
+    scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
+print(p2)
+savefig <- paste0('figures/pca_2-3_',searchstring,'_',today,'.png')
+ggsave(savefig, plot=p2)
+
+# Positivity
+pal2 <- brewer.pal(10,"RdBu")
+p2 <- ggplot(statuses, aes(y=PC2, x=positivity)) +
+    geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
+    scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
+print(p2)
+savefig <- paste0('figures/pca_2-pos_',searchstring,'_',today,'.png')
 ggsave(savefig, plot=p2)
 
 # Additional PCA checks
@@ -135,6 +153,8 @@ tweet_check <- function(text, pc, numbreaks=5){
 tweet_check(statuses$text, statuses$PC1, 10) %>% kable
 
 tweet_check(statuses$text, statuses$PC2, 10) %>% kable
+
+tweet_check(statuses$text, statuses$PC3, 10) %>% kable
 
 tweet_check(statuses$text, statuses$positivity, 10) %>% kable
 
