@@ -1,11 +1,6 @@
----
-title: "Sentiment and Principal Component Analysis of Twitter Data"
-author: "David Rodriguez"
-date: "February 24, 2016"
-output: 
-  html_document: 
-    keep_md: yes
----
+# Sentiment and Principal Component Analysis of Twitter Data
+David Rodriguez  
+February 24, 2016  
 
 ## Introduction
 
@@ -18,7 +13,8 @@ The ultimate goal of any analysis is to be able to predict some quantity of inte
 ## Experiment Setup
 
 Load up required packages:
-```{r message=F, warning=F}
+
+```r
 library(twitteR)
 library(tm)
 library(rjson)
@@ -35,7 +31,8 @@ library(rpart)
 ```
 
 To access twitter, I need to provide authorization credentials for my Twitter application:
-```{r eval=T}
+
+```r
 secrets <- fromJSON(file='twitter_secrets.json.nogit')
 
 setup_twitter_oauth(secrets$api_key,
@@ -44,8 +41,13 @@ setup_twitter_oauth(secrets$api_key,
                     secrets$access_token_secret)
 ```
 
+```
+## [1] "Using direct authentication"
+```
+
 Perform a twitter search and extract the information I want:
-```{r eval=F}
+
+```r
 searchstring <- 'microsoft'
 numtweets <- 10000
 st <- searchTwitter(searchstring, n=numtweets, resultType = 'recent', lang = 'en')
@@ -60,14 +62,16 @@ statuses <- data.frame(text=sapply(st, function(x) x$getText()),
 ```
 
 Remove retweets for clarity:
-```{r eval=F}
+
+```r
 statuses <-
     statuses %>%
     filter(!RT)
 ```
 
 Save tweets for future use:
-```{r savetweets, eval=F}
+
+```r
 today <- format(Sys.time(), '%Y-%m-%d')
 savename <- paste0('data/tweets_',searchstring,'_',
                    nrow(statuses),'_',today,'.Rda')
@@ -75,10 +79,18 @@ saveRDS(statuses, file=savename)
 ```
 
 Alternatively, I load up prior searches to avoid re-running:
-```{r loadtweets, eval=T}
+
+```r
 files <- list.files('data','tweets_')
 searchstring <- 'microsoft'
 rm(statuses)
+```
+
+```
+## Warning in rm(statuses): object 'statuses' not found
+```
+
+```r
 for(i in 1:length(files)) {
     selectedfile <- paste0('data/',files[i])
     print(selectedfile)
@@ -90,12 +102,18 @@ for(i in 1:length(files)) {
 }
 ```
 
-Total number of tweets to process is `r nrow(statuses)`
+```
+## [1] "data/tweets_microsoft_6364_2016-02-29.Rda"
+## [1] "data/tweets_microsoft_6768_2016-03-01.Rda"
+```
+
+Total number of tweets to process is 13132
 
 ## Text Analysis
 
 Gather the tweets:
-```{r gathercorpus, cache=T}
+
+```r
 textdata <- Corpus(VectorSource(statuses$text))
 
 textdata <- 
@@ -116,13 +134,15 @@ save(textdata, file = 'data/testdata_corpus.RData')
 rm(textdata)
 ```
 
-```{r loadcorpus, cache=F}
+
+```r
 load('data/testdata_corpus.RData') 
 ```
 
 
 I also perform a sentiment analysis on the text data by comparing the words with those from the [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), which assigns them two 8 emotions (eg, anger, joy, etc) and 2 sentiments (postive and negative). I create a new variable, positivity, which is the difference between the positive and negative sentiments.
-```{r sentiment, eval=T, cache=T}
+
+```r
 sentiments <- sapply(textdata, function(x) get_nrc_sentiment(as.character(x)))
 
 sentiments <- as.data.frame(aperm(sentiments)) # transpose and save as dataframe
@@ -133,14 +153,18 @@ sentiments <-
 ```
 
 A quick wordcloud of the tweets reveals the 100 key words used:
-```{r wordcloud}
+
+```r
 pal2 <- brewer.pal(8,"Dark2")
 wordcloud(textdata, max.words = 100, colors= pal2, random.order=F, 
           rot.per=0.1, use.r.layout=F)
 ```
 
+![](microsoft_analysis_files/figure-html/wordcloud-1.png) 
+
 Further processing to get word counts:
-```{r termmatrix, message=F, results='hide', cache=T}
+
+```r
 dtm <- DocumentTermMatrix(textdata)
 dtm <- inspect(dtm)
 
@@ -148,12 +172,14 @@ save(dtm, file = 'data/DocumentTermMatrix.RData')
 rm(dtm)
 ```
 
-```{r loadmatrix, cache=F}
+
+```r
 load('data/DocumentTermMatrix.RData') 
 ```
 
 Sort in descending order to find the most common terms:
-```{r cache=F}
+
+```r
 words <- data.frame(term = colnames(dtm))
 words$count <- colSums(dtm)
 
@@ -163,8 +189,19 @@ words <-
 head(words)
 ```
 
+```
+##        term count
+## 1 microsoft 11856
+## 2    window  2311
+## 3      xbox  2255
+## 4   hololen  1721
+## 5      game  1599
+## 6       new  1192
+```
+
 Convert tweets to data frame and select only the top 100 words to process:
-```{r tweets_frame, cache=T}
+
+```r
 tweets <- as.data.frame(dtm)
 ind <- data.frame('id'=seq.int(nrow(tweets)))
 tweets <- cbind(ind, tweets)
@@ -176,38 +213,54 @@ save(tweets, file = 'data/tweets.RData')
 rm(tweets, dtm)
 ```
 
-```{r tweets_load, cache=F}
+
+```r
 rm(dtm, textdata)
+```
+
+```
+## Warning in rm(dtm, textdata): object 'dtm' not found
+```
+
+```r
 load('data/tweets.RData') 
 ```
 
 ## Principal Component Analysis
 
 Perform a principal component analysis on the tweet data set and join the information (first 5 components) to the original status array.
-```{r runpca, cache=T}
+
+```r
 trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
 pca <- predict(trans, tweets[,2:ncol(tweets)])
 statuses <- cbind(statuses, pca[,1:5], sentiments)
 ```
 
 I now examine the reprojected data:
-```{r pca1-2_plot}
+
+```r
 pal2 <- brewer.pal(10,"RdBu")
 ggplot(statuses, aes(x=PC1, y=PC2)) + 
     geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
     scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
 ```
 
+![](microsoft_analysis_files/figure-html/pca1-2_plot-1.png) 
+
 Sometimes the other principal components are more illustrative:
-```{r pca2-3_plot}
+
+```r
 pal2 <- brewer.pal(10,"RdBu")
 ggplot(statuses, aes(x=PC2, y=PC3)) + 
     geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
     scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
 ```
 
+![](microsoft_analysis_files/figure-html/pca2-3_plot-1.png) 
+
 I remove outliers, which I define as the 2% highest and lowest PC values in terms of PC1 and PC2:
-```{r outlier_cuts, eval=T}
+
+```r
 cutlevel <- 2/100.
 cut1 <- quantile(statuses$PC1, probs=c(cutlevel,1-cutlevel))
 cut2 <- quantile(statuses$PC2, probs=c(cutlevel,1-cutlevel))
@@ -220,7 +273,8 @@ statuses <-
 
 
 The loading factors reveal how important each term is to the principal component axes. Here are the top few terms of the first two components:
-```{r}
+
+```r
 loadings <- trans$rotation 
 load_sqr <- loadings^2
 
@@ -231,15 +285,48 @@ load_sqr %>%
     select(term, PC1) %>%
     arrange(desc(PC1)) %>%
     head(10) %>% kable
+```
 
+
+
+term             PC1
+--------  ----------
+restor     0.0983066
+slam       0.0977344
+epic       0.0971905
+faith      0.0969293
+human      0.0939914
+ballmer    0.0914452
+steve      0.0911956
+dunk       0.0891933
+former     0.0891634
+ceo        0.0869296
+
+```r
 load_sqr %>%
     select(term, PC2) %>%
     arrange(desc(PC2)) %>%
     head(10) %>% kable
 ```
 
+
+
+term              PC2
+---------  ----------
+fun         0.1589405
+csrrace     0.1557036
+have        0.1487819
+join        0.1443763
+play        0.1277830
+free        0.1087408
+window      0.0359545
+hololen     0.0129898
+develop     0.0115247
+preorder    0.0098478
+
 I've created a function to sample tweets across the PC spectrum.
-```{r}
+
+```r
 set.seed(42)
 tweet_check <- function(text, pc, numbreaks=5){
     cuts <- cut(pc, numbreaks)
@@ -254,25 +341,174 @@ tweet_check <- function(text, pc, numbreaks=5){
 ```
 
 Here are the results for PC1:
-```{r}
+
+```r
 tweet_check(statuses$text, statuses$PC1, 10) %>% kable(format='html')
 ```
 
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> pc_val </th>
+   <th style="text-align:left;"> text </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> (-15.2,-13.6] </td>
+   <td style="text-align:left;"> Former Microsoft CEO Steve Ballmer's epic slam dunk will restore your faith in humanity https://t.co/3hG1xHevnX via @mashable </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-13.6,-11.9] </td>
+   <td style="text-align:left;"> DigitalLife: Former Microsoft CEO Steve Ballmer's epic slam dunk will restore your faith in huma... https://t.co/pzOBFJzqDR #ICTChallenge </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-11.9,-10.3] </td>
+   <td style="text-align:left;"> Former Microsoft CEO Steve Ballmers epic slam dunk will restore your fai... https://t.co/FCZkoPWBIv #business #money https://t.co/GCwP8QWUAd </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-10.3,-8.61] </td>
+   <td style="text-align:left;"> Former Microsoft CEO Steve Ballmer's epic slam dunk will… https://t.co/eIcrzOig6o #LosAngelesClippers #SteveBallmer #Microsoft #Buisness </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-6.96,-5.31] </td>
+   <td style="text-align:left;"> And, Uh, Here's Former Microsoft CEO Steve Ballmer Dunking https://t.co/DVsKjwmOA9 https://t.co/mN9eJG2M8i </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-5.31,-3.66] </td>
+   <td style="text-align:left;"> Damn, Ballmer. The former Microsoft CEO is at it again with an amazing dunk. https://t.co/sR4I023VzZ … https://t.co/DuKE43dxl7 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-3.66,-2.01] </td>
+   <td style="text-align:left;"> Ballmer's dunk is hilarious https://t.co/4pDlmi8WEf </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-2.01,-0.365] </td>
+   <td style="text-align:left;"> Microsoft Windows Shop Slammed For Trying To Merge Gaming Ecosystem: Microsoft who is set to roll out a TV in ... https://t.co/wovRQXqKVo </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-0.365,1.3] </td>
+   <td style="text-align:left;"> Pardon my French, but if the Xbox One is going to become even MORE like a PC then Microsoft can fuck right off. </td>
+  </tr>
+</tbody>
+</table>
+
 And here are the results for PC2:
-```{r}
+
+```r
 set.seed(42)
 tweet_check(statuses$text, statuses$PC2, 10) %>% kable(format='html')
 ```
 
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> pc_val </th>
+   <th style="text-align:left;"> text </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> (-4.36,-3.67] </td>
+   <td style="text-align:left;"> You won't need an Xbox to play Microsoft's next generation of games - CNET: Microsoft will bring games to… https://t.co/RBKOFOO4WO |Cnet </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-3.67,-2.99] </td>
+   <td style="text-align:left;"> You won’t need an Xbox to play Microsoft’s next generation of games – CNET https://t.co/MTiNFAPoaj </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-2.99,-2.3] </td>
+   <td style="text-align:left;"> You won't need an Xbox to play Microsoft's next generation ...   https://t.co/UMKXPtMODE [https://t.co/0j0RONeotm]&amp;lt;-Promo Code </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-2.3,-1.62] </td>
+   <td style="text-align:left;"> Have to say Steve Ballmer is really redeeming himself. I once compared him to Comic Sans but he's getting better  https://t.co/v8yO2jwnru </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-1.62,-0.933] </td>
+   <td style="text-align:left;"> Use #SAS Add-in for Microsoft Office to query data &amp;amp; run stored processes. Free webinar 3/3 #AsktheExpert #SASusers https://t.co/vMaa6pMbzu </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-0.933,-0.248] </td>
+   <td style="text-align:left;"> New on #MVA: Get Swaying! Microsoft Sway In Education https://t.co/Ax2D2KfBBp #Free #Training </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-0.248,0.436] </td>
+   <td style="text-align:left;"> @MightyPupil @CreatineAvenger @Microsoft @surface you could not be more wrong let my Kool Aid tell you </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (0.436,1.12] </td>
+   <td style="text-align:left;"> Microsoft Invites Devs to Tinker With HoloLens https://t.co/nhR4z906rT </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (1.12,1.8] </td>
+   <td style="text-align:left;"> Introducing first ever experiences for the Microsoft HoloLens Development Edition https://t.co/SHVizqcQCG  #hololens #augmentedreality #vr </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (1.8,2.5] </td>
+   <td style="text-align:left;"> First Hololens kit to cost $3,000: Microsoft starts taking orders for the developers' edition of its Hololens ... https://t.co/qCT6WrtvVW </td>
+  </tr>
+</tbody>
+</table>
+
 Finally, let's have a look at tweets grouped by positivity score:
-```{r}
+
+```r
 tweet_check(statuses$text, statuses$positivity, 10) %>% kable(format='html')
 ```
+
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> pc_val </th>
+   <th style="text-align:left;"> text </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> (-4.01,-3.2] </td>
+   <td style="text-align:left;"> microsoft, while kicking conker in the crotch: conker is a much beloved property. *begins shooting him with a gun* beloved *murders him* be </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-3.2,-2.4] </td>
+   <td style="text-align:left;"> Windows 10 is shit and Microsoft can suck my taint. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-2.4,-1.6] </td>
+   <td style="text-align:left;"> Microsoft Attacks Apple, Google Crashes a Car Into a Bus… [Tech News Digest] https://t.co/3PMdcpCLeE https://t.co/a3mzFGTn78 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-1.6,-0.8] </td>
+   <td style="text-align:left;"> Microsoft acquisition opens door for cross platform mobile appdev, by @jrdothoughts from @CIOonline @IDGCN https://t.co/HqbLJ6IXMW </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (-0.8,0] </td>
+   <td style="text-align:left;"> Microsoft highlights what Macs can’t do in new Windows 10 buggy ad https://t.co/7auGC50Vfo via @verge </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (0.8,1.6] </td>
+   <td style="text-align:left;"> Display live updating data from your desktop Microsoft #Excel spreadsheets in your #WordPress blog. https://t.co/TLfdCcPH7G #WordPress </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (1.6,2.4] </td>
+   <td style="text-align:left;"> Hands-on: Microsoft Lumia 550 second impressions; the best budget Lumia offering to date https://t.co/uRu0Wjrajp https://t.co/UqglYKnKjZ </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (2.4,3.2] </td>
+   <td style="text-align:left;"> February 29th, 2016: I've learned how to correctly spell &quot;particularly&quot; without assistance from Microsoft Word and/or Google </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> (3.2,4.01] </td>
+   <td style="text-align:left;"> Applied Microsoft Excel Course: Learn to master the commonly used functions and formulas in Microsoft Excel. https://t.co/TRzytt6RSi </td>
+  </tr>
+</tbody>
+</table>
 
 ## Gather User Data
 
 Now, I gather all the user data for each particular tweet.
-```{r gather_users, cache=T, eval=F}
+
+```r
 userlist <- sapply(unique(statuses$user), as.character)
 allusers <- lookupUsers(userlist)
 
@@ -295,12 +531,14 @@ save(userinfo, file='data/userinfo.Rdata')
 #rm(userinfo)
 ```
 
-```{r load_users, cache=F}
+
+```r
 load('data/userinfo.Rdata')
 ```
 
 The original tweets are grouped together by user (taking averages of the relevant quantities of interest) and then joined together to the user information data frame:
-```{r jointables, cache=F}
+
+```r
 newstatuses <-
     statuses %>%
     group_by(user) %>%
@@ -325,7 +563,8 @@ alldata <- inner_join(userinfo, newstatuses, by='user')
 
 I'll now decide on the quantity to predict and clean up the table to be able to run my models.
 I'll choose to examine the 2nd principal component, but this can readily be changed to the other components or the positivity.
-```{r}
+
+```r
 possiblepreds <- c('PC1','PC2','PC3','PC4','PC5')
 choice <- 'PC2'
 
@@ -345,14 +584,16 @@ df <- df %>%
 ```
 
 In the event that there are parameters with little variance, I remove them:
-```{r}
+
+```r
 nzv <- nearZeroVar(df)
 df_filter <- df[, -nzv]
 df_filter <- na.omit(df_filter)
 ```
 
 I now prepare my training and test data sets:
-```{r}
+
+```r
 set.seed(3456)
 trainIndex <- sample(nrow(df_filter), nrow(df_filter)*0.8)
 
@@ -361,7 +602,8 @@ df_test  <- df_filter[-trainIndex,]
 ```
 
 First, I'll run a regression tree model:
-```{r run_rpart, cache=F, message=F, results='hide'}
+
+```r
 rtGrid <- expand.grid(cp=seq(0.005, 0.1, by = 0.005)) # grid of cp values
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
 
@@ -370,13 +612,22 @@ rtTune <- train(toRun, data = df_train, method = "rpart",
                 tuneGrid = rtGrid, trControl = ctrl)
 ```
 
+```
+## Warning in nominalTrainWorkflow(x = x, y = y, wts = weights, info =
+## trainInfo, : There were missing values in resampled performance measures.
+```
+
 Here are the results for my regression tree model:
-```{r rt_plot}
+
+```r
 fancyRpartPlot(rtTune$finalModel, palettes=c("Blues"), sub='')
 ```
 
+![](microsoft_analysis_files/figure-html/rt_plot-1.png) 
+
 The numeric values of our best fit are saved for later comparison:
-```{r}
+
+```r
 df_test_all <- df_test
 df_test_all[,'id'] <- seq(nrow(df_test_all))
 pr_rt <- predict(rtTune, newdata = df_test)
@@ -388,7 +639,8 @@ df_test_all[,'diff_Tree'] = df_test_all[,choice] - pr_rt
 ```
 
 I next run a generalized linear model:
-```{r run_glm, cache=F, message=F, results='hide'}
+
+```r
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
     
 toRun <- formula(paste0(choice,' ~ .'))
@@ -398,12 +650,46 @@ rtTune <- train(toRun, data = df_train,
 ```
 
 Here are the best-fit model parameters:
-```{r}
+
+```r
 summary(rtTune)
 ```
 
+```
+## 
+## Call:
+## NULL
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -4.7862  -0.1446   0.0531   0.2858   2.1457  
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)     3.224e-01  2.039e-02  15.807  < 2e-16 ***
+## numstatuses    -3.985e-07  7.850e-08  -5.077 3.94e-07 ***
+## followers      -5.819e-08  8.663e-08  -0.672    0.502    
+## friends         2.743e-06  1.776e-06   1.545    0.122    
+## favorites      -3.623e-07  1.051e-06  -0.345    0.730    
+## numlists        1.041e-05  7.607e-06   1.368    0.171    
+## twitter_years   2.088e-03  3.948e-03   0.529    0.597    
+## numTopicTweets -2.412e-03  4.920e-03  -0.490    0.624    
+## positivity      9.551e-02  1.116e-02   8.559  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for gaussian family taken to be 0.6228807)
+## 
+##     Null deviance: 4019.6  on 6354  degrees of freedom
+## Residual deviance: 3952.8  on 6346  degrees of freedom
+## AIC: 15037
+## 
+## Number of Fisher Scoring iterations: 2
+```
+
 As before, we save the results for future comparison:
-```{r}
+
+```r
 pr_rt <- predict(rtTune, newdata = df_test)
 rmseGLM <- RMSE(pr_rt, df_test[,choice])
     
@@ -417,7 +703,8 @@ df_test_all[,'diff_GLM'] = df_test_all[,choice] - pr_rt
 ## Model Comparison
 
 The figure below compares the result of the various models:
-```{r rmse_plot}
+
+```r
 ggplot(data=df_test_all, aes(x=id)) +
     geom_point(aes(y=diff_Tree), color='dark green', alpha=0.6) + 
     geom_hline(yintercept=c(rmseTree, -1*rmseTree), color='dark green') +
@@ -427,10 +714,20 @@ ggplot(data=df_test_all, aes(x=id)) +
     labs(x='User', y='Difference from Model')
 ```
 
+![](microsoft_analysis_files/figure-html/rmse_plot-1.png) 
+
 Here is a table of the root mean square errors (RMSE), a measure of the goodness-of-fit:
-```{r}
+
+```r
 modelSummary %>% kable
 ```
+
+
+
+model                   RMSE
+----------------  ----------
+Regression Tree    0.7290474
+Generalized LM     0.7281301
 
 
 ## Conclusions
