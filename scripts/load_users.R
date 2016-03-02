@@ -40,9 +40,9 @@ userinfo <- data.frame(user=sapply(allusers, function(x) x$screenName),
                        account_created=sapply(allusers, function(x) format(x$created, 
                                                               format='%F %T')),
                        verified=sapply(allusers, function(x) x$verified),
-                       numlisted=sapply(allusers, function(x) x$listedCount)) %>%
+                       numlists=sapply(allusers, function(x) x$listedCount)) %>%
     mutate(user=as.character(user)) %>%
-    mutate(twitter_years=interval(twitter_date,account_created) / dyears(1)) %>%
+    mutate(twitter_years=interval(account_created, Sys.time()) / dyears(1)) %>%
     select(-account_created)
 
 # Group tweet data by user

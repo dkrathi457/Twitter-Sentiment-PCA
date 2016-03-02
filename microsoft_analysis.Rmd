@@ -29,6 +29,7 @@ library(stringr)
 library(syuzhet) # for sentiment analysis
 library(rattle)
 library(lubridate)
+library(rpart)
 ```
 
 To access twitter, I need to provide authorization credentials for my Twitter application:
@@ -160,11 +161,14 @@ words <-
 head(words)
 ```
 
-Convert tweets to data frame:
+Convert tweets to data frame and select only the top 100 words to process:
 ```{r tweets_frame, cache=T}
 tweets <- as.data.frame(dtm)
 ind <- data.frame('id'=seq.int(nrow(tweets)))
 tweets <- cbind(ind, tweets)
+
+words_100 <- as.character(words[2:101,'term'])
+tweets <- tweets[,c('id',words_100)]
 
 save(tweets, file = 'data/tweets.RData') 
 rm(tweets, dtm)
@@ -175,24 +179,17 @@ rm(dtm, textdata)
 load('data/tweets.RData') 
 ```
 
-Select only the top 100 words (not the search term) to process:
-```{r cache=T}
-words_100 <- as.character(words[2:101,'term'])
-tweets <- tweets[,c('id',words_100)]
-```
-
 ## Principal Component Analysis
 
-Perform a principal component analysis on the tweet data set:
+Perform a principal component analysis on the tweet data set and join the information (first 5 components) to the original status array.
 ```{r runpca, cache=T}
 trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
 pca <- predict(trans, tweets[,2:ncol(tweets)])
+statuses <- cbind(statuses, pca[,1:5], sentiments)
 ```
 
-Join the PCA information (first five components) to the original status array.
 I now examine the reprojected data:
 ```{r pca1-2_plot}
-statuses <- cbind(statuses, pca[,1:5], sentiments)
 pal2 <- brewer.pal(10,"RdBu")
 ggplot(statuses, aes(x=PC1, y=PC2)) + 
     geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
@@ -206,6 +203,19 @@ ggplot(statuses, aes(x=PC2, y=PC3)) +
     geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
     scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
 ```
+
+I remove outliers, which I define as the 2% highest and lowest PC values in terms of PC1 and PC2:
+```{r outlier_cuts, eval=T}
+cutlevel <- 2/100.
+cut1 <- quantile(statuses$PC1, probs=c(cutlevel,1-cutlevel))
+cut2 <- quantile(statuses$PC2, probs=c(cutlevel,1-cutlevel))
+
+statuses <- 
+    statuses %>%
+    filter(PC1>cut1[1] & PC1<cut1[2]) %>%
+    filter(PC2>cut2[1] & PC2<cut2[2])
+```
+
 
 The loading factors reveal how important each term is to the principal component axes. Here are the top few terms of the first two components:
 ```{r}
@@ -231,10 +241,12 @@ I've created a function to sample tweets across the PC spectrum.
 set.seed(42)
 tweet_check <- function(text, pc, numbreaks=5){
     cuts <- cut(pc, numbreaks)
+    #cuts <- cut(pc, breaks=quantile(pc, probs=seq(0,1,1/numbreaks)))
     temp <- data.frame(text=text, pc=pc, pc_val=cuts)
     temp <- temp %>%
         group_by(pc_val) %>%
-        summarise(text=iconv(sample(text,1), to='UTF-8-MAC', sub='byte'))
+        summarise(text=iconv(sample(text,1), to='UTF-8-MAC', sub='byte')) %>%
+        filter(!is.na(pc_val))
     return(temp)
 }
 ```
@@ -246,6 +258,7 @@ tweet_check(statuses$text, statuses$PC1, 10) %>% kable(format='html')
 
 And here are the results for PC2:
 ```{r}
+set.seed(42)
 tweet_check(statuses$text, statuses$PC2, 10) %>% kable(format='html')
 ```
 
@@ -261,9 +274,6 @@ Now, I gather all the user data for each particular tweet.
 userlist <- sapply(unique(statuses$user), as.character)
 allusers <- lookupUsers(userlist)
 
-# Date scince founding of twitter (March 21, 2006)
-twitter_date <- mdy_hm('03-21-2006 9:50 PM PST')
-
 # Gather all the user info in a data frame
 userinfo <- data.frame(user=sapply(allusers, function(x) x$screenName),
                        realname=sapply(allusers, function(x) x$name),
@@ -274,13 +284,13 @@ userinfo <- data.frame(user=sapply(allusers, function(x) x$screenName),
                        account_created=sapply(allusers, function(x) format(x$created, 
                                                               format='%F %T')),
                        verified=sapply(allusers, function(x) x$verified),
-                       numlisted=sapply(allusers, function(x) x$listedCount)) %>%
+                       numlists=sapply(allusers, function(x) x$listedCount)) %>%
     mutate(user=as.character(user)) %>%
-    mutate(twitter_years=interval(twitter_date,account_created) / dyears(1)) %>%
+    mutate(twitter_years=interval(account_created, Sys.time()) / dyears(1)) %>%
     select(-account_created)
 
 save(userinfo, file='data/userinfo.Rdata')
-rm(userinfo)
+#rm(userinfo)
 ```
 
 ```{r load_users, cache=F}
@@ -288,7 +298,7 @@ load('data/userinfo.Rdata')
 ```
 
 The original tweets are grouped together by user (taking averages of the relevant quantities of interest) and then joined together to the user information data frame:
-```{r jointables, cache=T}
+```{r jointables, cache=F}
 newstatuses <-
     statuses %>%
     group_by(user) %>%
@@ -314,7 +324,7 @@ alldata <- inner_join(userinfo, newstatuses, by='user')
 I'll now decide on the quantity to predict and clean up the table to be able to run my models.
 I'll choose to examine the 2nd principal component, but this can readily be changed to the other components or the positivity.
 ```{r}
-possiblepreds <- c('positivity','PC1','PC2','PC3','PC4','PC5')
+possiblepreds <- c('PC1','PC2','PC3','PC4','PC5')
 choice <- 'PC2'
 
 # Remove columns
@@ -328,15 +338,8 @@ if(T){
 }
 
 df <- df %>% 
-    select(-user, -realname, -client) 
-```
-
-Here is a quick plot on how the user-averaged data look like now:
-```{r user_pca}
-pal2 <- brewer.pal(10,"RdBu")
-p2 <- ggplot(df, aes(x=PC2, y=PC3)) + 
-    geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
-    scale_fill_gradientn(colours = pal2, limits=c(-5,5)) + theme_bw()
+    select(-user, -realname, -client) %>%
+    select(-(anger:trust)) # removing sentiment columns
 ```
 
 In the event that there are parameters with little variance, I remove them:
@@ -356,8 +359,8 @@ df_test  <- df_filter[-trainIndex,]
 ```
 
 First, I'll run a regression tree model:
-```{r run_rpart, cache=T, message=F, results='hide'}
-rtGrid <- expand.grid(cp=seq(0.01, 0.2, by = 0.005)) # grid of cp values
+```{r run_rpart, cache=F, message=F, results='hide'}
+rtGrid <- expand.grid(cp=seq(0.005, 0.1, by = 0.005)) # grid of cp values
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
 
 toRun <- formula(paste0(choice,' ~ .'))
@@ -383,7 +386,7 @@ df_test_all[,'diff_Tree'] = df_test_all[,choice] - pr_rt
 ```
 
 I next run a generalized linear model:
-```{r run_glm, cache=T, message=F, results='hide'}
+```{r run_glm, cache=F, message=F, results='hide'}
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
     
 toRun <- formula(paste0(choice,' ~ .'))
