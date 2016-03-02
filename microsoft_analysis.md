@@ -155,12 +155,27 @@ sentiments <-
 A quick wordcloud of the tweets reveals the 100 key words used:
 
 ```r
-pal2 <- brewer.pal(8,"Dark2")
+pal2 <- brewer.pal(8,"RdBu")
 wordcloud(textdata, max.words = 100, colors= pal2, random.order=F, 
           rot.per=0.1, use.r.layout=F)
 ```
 
 ![](microsoft_analysis_files/figure-html/wordcloud-1.png) 
+
+And here are the emotions expressed in these tweets:
+
+```r
+emotions <- data.frame("count"=colSums(sentiments[,c(1:8)]))
+emotions <- cbind("sentiment" = rownames(emotions), emotions)
+
+ggplot(data = emotions, aes(x = sentiment, y = count)) +
+    geom_bar(aes(fill = sentiment), stat = "identity") +
+    xlab("Sentiment") + ylab("Total Count") + 
+    scale_fill_brewer(palette='RdBu') + 
+    theme_bw() + theme(legend.position='none')
+```
+
+![](microsoft_analysis_files/figure-html/sentiment_plot-1.png) 
 
 Further processing to get word counts:
 
@@ -216,13 +231,6 @@ rm(tweets, dtm)
 
 ```r
 rm(dtm, textdata)
-```
-
-```
-## Warning in rm(dtm, textdata): object 'dtm' not found
-```
-
-```r
 load('data/tweets.RData') 
 ```
 
