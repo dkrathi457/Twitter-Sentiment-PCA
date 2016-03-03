@@ -28,6 +28,8 @@ library(syuzhet) # for sentiment analysis
 library(rattle)
 library(lubridate)
 library(rpart)
+library(randomForest)
+library(glmnet)
 ```
 
 To access twitter, I need to provide authorization credentials for my Twitter application:
@@ -569,6 +571,8 @@ alldata <- inner_join(userinfo, newstatuses, by='user')
 
 ## Predictive Analysis
 
+### Setup
+
 I'll now decide on the quantity to predict and clean up the table to be able to run my models.
 I'll choose to examine the 2nd principal component, but this can readily be changed to the other components or the positivity.
 
@@ -599,6 +603,8 @@ df_filter <- df[, -nzv]
 df_filter <- na.omit(df_filter)
 ```
 
+There are now only 9 parameters, including PC2.
+
 I now prepare my training and test data sets:
 
 ```r
@@ -609,23 +615,17 @@ df_train <- df_filter[ trainIndex,]
 df_test  <- df_filter[-trainIndex,]
 ```
 
+### Regression Tree
+
 First, I'll run a regression tree model:
 
 ```r
 rtGrid <- expand.grid(cp=seq(0.005, 0.1, by = 0.005)) # grid of cp values
-ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
+ctrl <- trainControl(method = "cv", number = 10, verboseIter = F)
 
 toRun <- formula(paste0(choice,' ~ .'))
 rtTune <- train(toRun, data = df_train, method = "rpart", 
                 tuneGrid = rtGrid, trControl = ctrl)
-```
-
-```
-## Warning in nominalTrainWorkflow(x = x, y = y, wts = weights, info =
-## trainInfo, : There were missing values in resampled performance measures.
-```
-
-```r
 final_tree <- rtTune$finalModel
 ```
 
@@ -642,22 +642,21 @@ modelSummary <- data.frame(model='Regression Tree',
 df_test_all[,'diff_Tree'] = df_test_all[,choice] - pr_rt
 ```
 
+### Generalized Linear Model
+
 I next run a generalized linear model:
 
 ```r
-ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
-    
 toRun <- formula(paste0(choice,' ~ .'))
-rtTune <- train(toRun, data = df_train,   
-                method = "glm", 
-                trControl = ctrl)
-glm_summary <- summary(rtTune)
+rtTune2 <- train(toRun, data = df_train, method = "glm")
+
+glm_summary <- summary(rtTune2)
 ```
 
 As before, we save the results for future comparison:
 
 ```r
-pr_rt <- predict(rtTune, newdata = df_test)
+pr_rt <- predict(rtTune2, newdata = df_test)
 rmseGLM <- RMSE(pr_rt, df_test[,choice])
     
 newRow <- data.frame(model='Generalized LM',
@@ -667,20 +666,105 @@ modelSummary <- rbind(modelSummary, newRow)
 df_test_all[,'diff_GLM'] = df_test_all[,choice] - pr_rt
 ```
 
+### Random Forest
+
+Next, I run a random forest model:
+
+```r
+rtGrid = expand.grid(mtry=seq(3, 7, by = 1)) # grid of mtry values
+ctrl <- trainControl(method = "cv", number = 5, verboseIter = F)
+
+toRun <- formula(paste0(choice,' ~ .'))
+rtTune3 <- train(toRun, data = df_train, 
+                method = "rf",
+                tuneGrid = rtGrid,
+                trControl = ctrl, importance=T)
+```
+
+The best random forest model considers 3 random parameters at each split. This is the overall importance of the various parameters:
+
+```r
+varImp(rtTune3)
+```
+
+```
+## rf variable importance
+## 
+##                Overall
+## positivity      100.00
+## numlists         61.42
+## followers        48.05
+## numstatuses      41.74
+## favorites        32.22
+## twitter_years    22.83
+## friends          22.06
+## numTopicTweets    0.00
+```
+
+
+```r
+pr_rt <- predict(rtTune3, newdata = df_test)
+rmseRF <- RMSE(pr_rt, df_test[,choice])
+    
+newRow <- data.frame(model='Random Forest',
+                     RMSE=rmseRF)
+modelSummary <- rbind(modelSummary, newRow)
+    
+df_test_all[,'diff_RF'] = df_test_all[,choice] - pr_rt
+```
+
+### GLMNET
+
+Finally, I consider another generalized linear model with an elastic-net penalty that controls whether we are considering a lasso or ridge regression:
+
+```r
+enetGrid <- expand.grid(.alpha = c(0, 0.1, 0.5, 0.7, 1), 
+                        .lambda = seq(0, 5, by = 0.1))
+
+ctrl <- trainControl(method = "cv", number = 10, verboseIter = F)
+
+toRun <- formula(paste0(choice,' ~ .'))
+rtTune4 <- train(toRun, data = df_train,    
+                  method = "glmnet", 
+                  tuneGrid = enetGrid,
+                  trControl = ctrl)
+```
+
+The best alpha and lambda parameters for the GLMNET model are 0.1, 0.1
+
+
+```r
+pr_rt <- predict(rtTune4, newdata = df_test)
+rmseGLMNET <- RMSE(pr_rt, df_test[,choice])
+    
+newRow <- data.frame(model='GLMNET',
+                     RMSE=rmseGLMNET)
+modelSummary <- rbind(modelSummary, newRow)
+    
+df_test_all[,'diff_GLMNET'] = df_test_all[,choice] - pr_rt
+```
+
+
 ## Model Comparison
 
 The figure below compares the result of the various models:
 
 ```r
-cols <- c("RTree"="dark green","GLM"="dark blue","RForest"="dark orange")
+cols <- c("RTree"="dark green", "GLM"="dark blue",
+          "RForest"="dark orange", "GLMNET"="dark red")
+alphalvl <- 0.3
 ggplot(data=df_test_all, aes(x=id)) +
-    geom_point(aes(y=diff_Tree, color='RTree'), alpha=0.6) + 
+    geom_point(aes(y=diff_Tree, color='RTree'), alpha=alphalvl) + 
     geom_hline(yintercept=c(rmseTree, -1*rmseTree), color=cols['RTree']) +
-    geom_point(aes(y=diff_GLM, color='GLM'), alpha=0.6) + 
+    geom_point(aes(y=diff_GLM, color='GLM'), alpha=alphalvl) + 
     geom_hline(yintercept=c(rmseGLM, -1*rmseGLM), color=cols['GLM']) +
-    theme_bw() + coord_cartesian(ylim=c(-4,4)) + 
+    geom_point(aes(y=diff_RF, color='RForest'), alpha=alphalvl) + 
+    geom_hline(yintercept=c(rmseRF, -1*rmseRF), color=cols['RForest']) +
+    geom_point(aes(y=diff_GLMNET, color='GLMNET'), alpha=alphalvl) + 
+    geom_hline(yintercept=c(rmseGLMNET, -1*rmseGLMNET), color=cols['GLMNET']) +
+    theme_bw() + coord_cartesian(ylim=c(-2,2)) + 
     scale_colour_manual(name="Model",values=cols) +
-    labs(x='User', y='Difference from Model')
+    labs(x='Twitter User', y='Difference from Model')
 ```
 
 ![](microsoft_analysis_files/figure-html/rmse_plot-1.png) 
@@ -697,6 +781,8 @@ model                   RMSE
 ----------------  ----------
 Regression Tree    0.7290474
 Generalized LM     0.7281301
+Random Forest      0.7065228
+GLMNET             0.7291258
 
 
 ## Summary

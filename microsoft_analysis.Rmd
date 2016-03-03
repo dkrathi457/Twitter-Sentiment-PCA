@@ -32,6 +32,8 @@ library(syuzhet) # for sentiment analysis
 library(rattle)
 library(lubridate)
 library(rpart)
+library(randomForest)
+library(glmnet)
 ```
 
 To access twitter, I need to provide authorization credentials for my Twitter application:
@@ -335,6 +337,8 @@ alldata <- inner_join(userinfo, newstatuses, by='user')
 
 ## Predictive Analysis
 
+### Setup
+
 I'll now decide on the quantity to predict and clean up the table to be able to run my models.
 I'll choose to examine the 2nd principal component, but this can readily be changed to the other components or the positivity.
 ```{r}
@@ -363,6 +367,8 @@ df_filter <- df[, -nzv]
 df_filter <- na.omit(df_filter)
 ```
 
+There are now only `r ncol(df_filter)` parameters, including PC2.
+
 I now prepare my training and test data sets:
 ```{r}
 set.seed(3456)
@@ -372,10 +378,12 @@ df_train <- df_filter[ trainIndex,]
 df_test  <- df_filter[-trainIndex,]
 ```
 
+### Regression Tree
+
 First, I'll run a regression tree model:
-```{r run_rpart, cache=T, message=F, results='hide'}
+```{r run_rpart, cache=T, message=F, results='hide', warning=F}
 rtGrid <- expand.grid(cp=seq(0.005, 0.1, by = 0.005)) # grid of cp values
-ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
+ctrl <- trainControl(method = "cv", number = 10, verboseIter = F)
 
 toRun <- formula(paste0(choice,' ~ .'))
 rtTune <- train(toRun, data = df_train, method = "rpart", 
@@ -395,20 +403,19 @@ modelSummary <- data.frame(model='Regression Tree',
 df_test_all[,'diff_Tree'] = df_test_all[,choice] - pr_rt
 ```
 
+### Generalized Linear Model
+
 I next run a generalized linear model:
-```{r run_glm, cache=T, message=F, results='hide'}
-ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
-    
+```{r run_glm, cache=F, message=F, results='hide'}
 toRun <- formula(paste0(choice,' ~ .'))
-rtTune <- train(toRun, data = df_train,   
-                method = "glm", 
-                trControl = ctrl)
-glm_summary <- summary(rtTune)
+rtTune2 <- train(toRun, data = df_train, method = "glm")
+
+glm_summary <- summary(rtTune2)
 ```
 
 As before, we save the results for future comparison:
 ```{r}
-pr_rt <- predict(rtTune, newdata = df_test)
+pr_rt <- predict(rtTune2, newdata = df_test)
 rmseGLM <- RMSE(pr_rt, df_test[,choice])
     
 newRow <- data.frame(model='Generalized LM',
@@ -418,19 +425,85 @@ modelSummary <- rbind(modelSummary, newRow)
 df_test_all[,'diff_GLM'] = df_test_all[,choice] - pr_rt
 ```
 
+### Random Forest
+
+Next, I run a random forest model:
+```{r random_forest, cache=T}
+rtGrid = expand.grid(mtry=seq(3, 7, by = 1)) # grid of mtry values
+ctrl <- trainControl(method = "cv", number = 5, verboseIter = F)
+
+toRun <- formula(paste0(choice,' ~ .'))
+rtTune3 <- train(toRun, data = df_train, 
+                method = "rf",
+                tuneGrid = rtGrid,
+                trControl = ctrl, importance=T)
+```
+
+The best random forest model considers `r rtTune3$bestTune` random parameters at each split. This is the overall importance of the various parameters:
+```{r}
+varImp(rtTune3)
+```
+
+```{r}
+pr_rt <- predict(rtTune3, newdata = df_test)
+rmseRF <- RMSE(pr_rt, df_test[,choice])
+    
+newRow <- data.frame(model='Random Forest',
+                     RMSE=rmseRF)
+modelSummary <- rbind(modelSummary, newRow)
+    
+df_test_all[,'diff_RF'] = df_test_all[,choice] - pr_rt
+```
+
+### GLMNET
+
+Finally, I consider another generalized linear model with an elastic-net penalty that controls whether we are considering a lasso or ridge regression:
+```{r run_glmnet, cache=T, warning=F}
+enetGrid <- expand.grid(.alpha = c(0, 0.1, 0.5, 0.7, 1), 
+                        .lambda = seq(0, 5, by = 0.1))
+
+ctrl <- trainControl(method = "cv", number = 10, verboseIter = F)
+
+toRun <- formula(paste0(choice,' ~ .'))
+rtTune4 <- train(toRun, data = df_train,    
+                  method = "glmnet", 
+                  tuneGrid = enetGrid,
+                  trControl = ctrl)
+```
+
+The best alpha and lambda parameters for the GLMNET model are `r rtTune4$bestTune`
+
+```{r}
+pr_rt <- predict(rtTune4, newdata = df_test)
+rmseGLMNET <- RMSE(pr_rt, df_test[,choice])
+    
+newRow <- data.frame(model='GLMNET',
+                     RMSE=rmseGLMNET)
+modelSummary <- rbind(modelSummary, newRow)
+    
+df_test_all[,'diff_GLMNET'] = df_test_all[,choice] - pr_rt
+```
+
+
 ## Model Comparison
 
 The figure below compares the result of the various models:
 ```{r rmse_plot}
-cols <- c("RTree"="dark green","GLM"="dark blue","RForest"="dark orange")
+cols <- c("RTree"="dark green", "GLM"="dark blue",
+          "RForest"="dark orange", "GLMNET"="dark red")
+alphalvl <- 0.3
 ggplot(data=df_test_all, aes(x=id)) +
-    geom_point(aes(y=diff_Tree, color='RTree'), alpha=0.6) + 
+    geom_point(aes(y=diff_Tree, color='RTree'), alpha=alphalvl) + 
     geom_hline(yintercept=c(rmseTree, -1*rmseTree), color=cols['RTree']) +
-    geom_point(aes(y=diff_GLM, color='GLM'), alpha=0.6) + 
+    geom_point(aes(y=diff_GLM, color='GLM'), alpha=alphalvl) + 
     geom_hline(yintercept=c(rmseGLM, -1*rmseGLM), color=cols['GLM']) +
-    theme_bw() + coord_cartesian(ylim=c(-4,4)) + 
+    geom_point(aes(y=diff_RF, color='RForest'), alpha=alphalvl) + 
+    geom_hline(yintercept=c(rmseRF, -1*rmseRF), color=cols['RForest']) +
+    geom_point(aes(y=diff_GLMNET, color='GLMNET'), alpha=alphalvl) + 
+    geom_hline(yintercept=c(rmseGLMNET, -1*rmseGLMNET), color=cols['GLMNET']) +
+    theme_bw() + coord_cartesian(ylim=c(-2,2)) + 
     scale_colour_manual(name="Model",values=cols) +
-    labs(x='User', y='Difference from Model')
+    labs(x='Twitter User', y='Difference from Model')
 ```
 
 Here is a table of the root mean square errors (RMSE), a measure of the goodness-of-fit:
