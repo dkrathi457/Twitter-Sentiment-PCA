@@ -1,4 +1,4 @@
-# Sentiment and Principal Component Analysis of Twitter Data
+# Sentiment and Principal Component Analysis of Twitter Data: Microsoft Study
 David Rodriguez  
 February 24, 2016  
 
@@ -6,7 +6,7 @@ February 24, 2016
 
 Twitter is a powerful tool that enables users to communicate with others and also empowers data scientists with large quantities of data they can use. Communications on twitter are live and dynamic, changing every second. They are also short, limited to 140 characters. The analysis of such short, fast-moving data can reveal how people communicate on a particular subject.
 
-For this analysis, I have chosen to gather English-language tweets containing the word 'microsoft'. This allows me to explore how people regard the microsoft brand, as well as how they treat any news articles referring to microsoft. In practice, this methodology can be employed to any other broadly tweeted topic, including politics (eg, presidential candidates) and popular culture (eg, the Academy Awards).
+For this analysis, I have chosen to gather recent English-language tweets containing the word 'microsoft'. This allows me to explore how people regard the microsoft brand, as well as how they treat any news articles referring to microsoft. In practice, this methodology can be employed to any other broadly tweeted topic, including politics and popular culture.
 
 The ultimate goal of any analysis is to be able to predict some quantity of interest. For my purposes, I wished to examine if I could predict how users would tweet about the specified subject based on information publicly available from Twitter.
 
@@ -625,13 +625,9 @@ rtTune <- train(toRun, data = df_train, method = "rpart",
 ## trainInfo, : There were missing values in resampled performance measures.
 ```
 
-Here are the results for my regression tree model:
-
 ```r
-fancyRpartPlot(rtTune$finalModel, palettes=c("Blues"), sub='')
+final_tree <- rtTune$finalModel
 ```
-
-![](microsoft_analysis_files/figure-html/rt_plot-1.png) 
 
 The numeric values of our best fit are saved for later comparison:
 
@@ -655,44 +651,7 @@ toRun <- formula(paste0(choice,' ~ .'))
 rtTune <- train(toRun, data = df_train,   
                 method = "glm", 
                 trControl = ctrl)
-```
-
-Here are the best-fit model parameters:
-
-```r
-summary(rtTune)
-```
-
-```
-## 
-## Call:
-## NULL
-## 
-## Deviance Residuals: 
-##     Min       1Q   Median       3Q      Max  
-## -4.7862  -0.1446   0.0531   0.2858   2.1457  
-## 
-## Coefficients:
-##                  Estimate Std. Error t value Pr(>|t|)    
-## (Intercept)     3.224e-01  2.039e-02  15.807  < 2e-16 ***
-## numstatuses    -3.985e-07  7.850e-08  -5.077 3.94e-07 ***
-## followers      -5.819e-08  8.663e-08  -0.672    0.502    
-## friends         2.743e-06  1.776e-06   1.545    0.122    
-## favorites      -3.623e-07  1.051e-06  -0.345    0.730    
-## numlists        1.041e-05  7.607e-06   1.368    0.171    
-## twitter_years   2.088e-03  3.948e-03   0.529    0.597    
-## numTopicTweets -2.412e-03  4.920e-03  -0.490    0.624    
-## positivity      9.551e-02  1.116e-02   8.559  < 2e-16 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for gaussian family taken to be 0.6228807)
-## 
-##     Null deviance: 4019.6  on 6354  degrees of freedom
-## Residual deviance: 3952.8  on 6346  degrees of freedom
-## AIC: 15037
-## 
-## Number of Fisher Scoring iterations: 2
+glm_summary <- summary(rtTune)
 ```
 
 As before, we save the results for future comparison:
@@ -738,5 +697,70 @@ Regression Tree    0.7290474
 Generalized LM     0.7281301
 
 
+## Summary
+
+I have looked at tweets concerning microsoft and have identified that the second principal component (PC2) appears to be relevant to sorting tweets by whether or not they are excited about the Hololens product or Xbox games on their personal computers. 
+While in principle, there are a lot of tweets and variations, I choose to use PC2 as a measure of the phrases used and developed a set of models to attempt to predict what values of PC2 a user would have. 
+
+This approach can be useful to determine what types of users are excited about the Hololens and which are excited about Xbox games (in this example) and can suggest targetted advertizing.
+
+Let's have a look at the regression tree as it's one of the clearest to describe:
+
+```r
+fancyRpartPlot(final_tree, palettes=c("Blues"), sub='')
+```
+
+![](microsoft_analysis_files/figure-html/rt_plot-1.png) 
+
+The above suggests that users with very negative PC2 values (associated with excitement about the Xbox product) also have very few followers and have been on Twitter a very small amount of time. This suggest these types of users are actually Twitter robot accounts created to spam advertisement on this particular Xbox news story. I would argue it's safe to disregard spending any advertising efforts on these users.
+
+On the other hand, for higher PC2 values (associated with excitement about the Hololens product), we can see more meaningful information. The value of PC2 for a user depends on the postivity, which is a measure on how often positive and negative words are used; the number of statuses or tweets they've had; the number of lists they follow; and the number of favorites they have.
+
+We can also have a look at the summary of results for the generalized linear model:
+
+```r
+glm_summary
+```
+
+```
+## 
+## Call:
+## NULL
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -4.7862  -0.1446   0.0531   0.2858   2.1457  
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)     3.224e-01  2.039e-02  15.807  < 2e-16 ***
+## numstatuses    -3.985e-07  7.850e-08  -5.077 3.94e-07 ***
+## followers      -5.819e-08  8.663e-08  -0.672    0.502    
+## friends         2.743e-06  1.776e-06   1.545    0.122    
+## favorites      -3.623e-07  1.051e-06  -0.345    0.730    
+## numlists        1.041e-05  7.607e-06   1.368    0.171    
+## twitter_years   2.088e-03  3.948e-03   0.529    0.597    
+## numTopicTweets -2.412e-03  4.920e-03  -0.490    0.624    
+## positivity      9.551e-02  1.116e-02   8.559  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for gaussian family taken to be 0.6228807)
+## 
+##     Null deviance: 4019.6  on 6354  degrees of freedom
+## Residual deviance: 3952.8  on 6346  degrees of freedom
+## AIC: 15037
+## 
+## Number of Fisher Scoring iterations: 2
+```
+
+This suggests the most significant quantities to predict the values of PC2 are the number of statuses or tweets and the positivity value. 
+
+While these models can predict the values of PC2, their errors remain fairly large. I interpret this as the PC2 value having large variation in terms of the word choices used to construct the individual tweets.
+A possible way to improve this model would be to consider more parameters given that we have enough data to support this. These additional parameters could come from twitter, or from additional sources.
+Another possibility is to re-examine our source of data. Rather than gathering 'recent' tweets, we could have gathered 'popuplar' or 'mixed' tweets, which would rely on Twitter's algorithms to return a different sample of tweets. 
+Yet another possibility would be to consider a different API, such as gathering data from Facebook.
+
 ## Conclusions
 
+In the end, while this project demonstrated a potential relationship between word choice and differentiation between Microsoft products, it can readily be expanded to any other topic of interest. However, given the varied nature of tweeted topics within a search, it is not always clear that a trend can or will emerge.

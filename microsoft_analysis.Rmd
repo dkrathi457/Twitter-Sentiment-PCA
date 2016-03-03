@@ -1,5 +1,5 @@
 ---
-title: "Sentiment and Principal Component Analysis of Twitter Data"
+title: "Sentiment and Principal Component Analysis of Twitter Data: Microsoft Study"
 author: "David Rodriguez"
 date: "February 24, 2016"
 output: 
@@ -11,7 +11,7 @@ output:
 
 Twitter is a powerful tool that enables users to communicate with others and also empowers data scientists with large quantities of data they can use. Communications on twitter are live and dynamic, changing every second. They are also short, limited to 140 characters. The analysis of such short, fast-moving data can reveal how people communicate on a particular subject.
 
-For this analysis, I have chosen to gather English-language tweets containing the word 'microsoft'. This allows me to explore how people regard the microsoft brand, as well as how they treat any news articles referring to microsoft. In practice, this methodology can be employed to any other broadly tweeted topic, including politics (eg, presidential candidates) and popular culture (eg, the Academy Awards).
+For this analysis, I have chosen to gather recent English-language tweets containing the word 'microsoft'. This allows me to explore how people regard the microsoft brand, as well as how they treat any news articles referring to microsoft. In practice, this methodology can be employed to any other broadly tweeted topic, including politics and popular culture.
 
 The ultimate goal of any analysis is to be able to predict some quantity of interest. For my purposes, I wished to examine if I could predict how users would tweet about the specified subject based on information publicly available from Twitter.
 
@@ -373,18 +373,14 @@ df_test  <- df_filter[-trainIndex,]
 ```
 
 First, I'll run a regression tree model:
-```{r run_rpart, cache=F, message=F, results='hide'}
+```{r run_rpart, cache=T, message=F, results='hide'}
 rtGrid <- expand.grid(cp=seq(0.005, 0.1, by = 0.005)) # grid of cp values
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
 
 toRun <- formula(paste0(choice,' ~ .'))
 rtTune <- train(toRun, data = df_train, method = "rpart", 
                 tuneGrid = rtGrid, trControl = ctrl)
-```
-
-Here are the results for my regression tree model:
-```{r rt_plot}
-fancyRpartPlot(rtTune$finalModel, palettes=c("Blues"), sub='')
+final_tree <- rtTune$finalModel
 ```
 
 The numeric values of our best fit are saved for later comparison:
@@ -400,18 +396,14 @@ df_test_all[,'diff_Tree'] = df_test_all[,choice] - pr_rt
 ```
 
 I next run a generalized linear model:
-```{r run_glm, cache=F, message=F, results='hide'}
+```{r run_glm, cache=T, message=F, results='hide'}
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
     
 toRun <- formula(paste0(choice,' ~ .'))
 rtTune <- train(toRun, data = df_train,   
                 method = "glm", 
                 trControl = ctrl)
-```
-
-Here are the best-fit model parameters:
-```{r}
-summary(rtTune)
+glm_summary <- summary(rtTune)
 ```
 
 As before, we save the results for future comparison:
@@ -445,5 +437,34 @@ modelSummary %>% kable
 ```
 
 
+## Summary
+
+I have looked at tweets concerning microsoft and have identified that the second principal component (PC2) appears to be relevant to sorting tweets by whether or not they are excited about the Hololens product or Xbox games on their personal computers. 
+While in principle, there are a lot of tweets and variations, I choose to use PC2 as a measure of the phrases used and developed a set of models to attempt to predict what values of PC2 a user would have. 
+
+This approach can be useful to determine what types of users are excited about the Hololens and which are excited about Xbox games (in this example) and can suggest targetted advertizing.
+
+Let's have a look at the regression tree as it's one of the clearest to describe:
+```{r rt_plot}
+fancyRpartPlot(final_tree, palettes=c("Blues"), sub='')
+```
+
+The above suggests that users with very negative PC2 values (associated with excitement about the Xbox product) also have very few followers and have been on Twitter a very small amount of time. This suggest these types of users are actually Twitter robot accounts created to spam advertisement on this particular Xbox news story. I would argue it's safe to disregard spending any advertising efforts on these users.
+
+On the other hand, for higher PC2 values (associated with excitement about the Hololens product), we can see more meaningful information. The value of PC2 for a user depends on the postivity, which is a measure on how often positive and negative words are used; the number of statuses or tweets they've had; the number of lists they follow; and the number of favorites they have.
+
+We can also have a look at the summary of results for the generalized linear model:
+```{r}
+glm_summary
+```
+
+This suggests the most significant quantities to predict the values of PC2 are the number of statuses or tweets and the positivity value. 
+
+While these models can predict the values of PC2, their errors remain fairly large. I interpret this as the PC2 value having large variation in terms of the word choices used to construct the individual tweets.
+A possible way to improve this model would be to consider more parameters given that we have enough data to support this. These additional parameters could come from twitter, or from additional sources.
+Another possibility is to re-examine our source of data. Rather than gathering 'recent' tweets, we could have gathered 'popuplar' or 'mixed' tweets, which would rely on Twitter's algorithms to return a different sample of tweets. 
+Yet another possibility would be to consider a different API, such as gathering data from Facebook.
+
 ## Conclusions
 
+In the end, while this project demonstrated a potential relationship between word choice and differentiation between Microsoft products, it can readily be expanded to any other topic of interest. However, given the varied nature of tweeted topics within a search, it is not always clear that a trend can or will emerge.
