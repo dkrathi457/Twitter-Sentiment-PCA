@@ -422,12 +422,14 @@ df_test_all[,'diff_GLM'] = df_test_all[,choice] - pr_rt
 
 The figure below compares the result of the various models:
 ```{r rmse_plot}
+cols <- c("RTree"="dark green","GLM"="dark blue","RForest"="dark orange")
 ggplot(data=df_test_all, aes(x=id)) +
-    geom_point(aes(y=diff_Tree), color='dark green', alpha=0.6) + 
-    geom_hline(yintercept=c(rmseTree, -1*rmseTree), color='dark green') +
-    geom_point(aes(y=diff_GLM), color='dark blue', alpha=0.6) + 
-    geom_hline(yintercept=c(rmseGLM, -1*rmseGLM), color='dark blue') +
+    geom_point(aes(y=diff_Tree, color='RTree'), alpha=0.6) + 
+    geom_hline(yintercept=c(rmseTree, -1*rmseTree), color=cols['RTree']) +
+    geom_point(aes(y=diff_GLM, color='GLM'), alpha=0.6) + 
+    geom_hline(yintercept=c(rmseGLM, -1*rmseGLM), color=cols['GLM']) +
     theme_bw() + coord_cartesian(ylim=c(-4,4)) + 
+    scale_colour_manual(name="Model",values=cols) +
     labs(x='User', y='Difference from Model')
 ```
 
