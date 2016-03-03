@@ -772,17 +772,35 @@ ggplot(data=df_test_all, aes(x=id)) +
 Here is a table of the root mean square errors (RMSE), a measure of the goodness-of-fit:
 
 ```r
-modelSummary %>% kable
+modelSummary %>% kable(format='html')
 ```
 
-
-
-model                   RMSE
-----------------  ----------
-Regression Tree    0.7290474
-Generalized LM     0.7281301
-Random Forest      0.7065228
-GLMNET             0.7291258
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> model </th>
+   <th style="text-align:right;"> RMSE </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> Regression Tree </td>
+   <td style="text-align:right;"> 0.7290474 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Generalized LM </td>
+   <td style="text-align:right;"> 0.7281301 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Random Forest </td>
+   <td style="text-align:right;"> 0.7065228 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> GLMNET </td>
+   <td style="text-align:right;"> 0.7291258 </td>
+  </tr>
+</tbody>
+</table>
 
 
 ## Summary

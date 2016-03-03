@@ -508,7 +508,7 @@ ggplot(data=df_test_all, aes(x=id)) +
 
 Here is a table of the root mean square errors (RMSE), a measure of the goodness-of-fit:
 ```{r}
-modelSummary %>% kable
+modelSummary %>% kable(format='html')
 ```
 
 
