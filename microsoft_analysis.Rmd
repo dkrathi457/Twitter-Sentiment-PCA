@@ -19,6 +19,7 @@ The ultimate goal of any analysis is to be able to predict some quantity of inte
 
 Load up required packages:
 ```{r message=F, warning=F}
+library(ggplot2)
 library(twitteR)
 library(tm)
 library(rjson)
@@ -110,8 +111,7 @@ textdata <-
     tm_map(content_transformer(function(x) str_replace_all(x, "@\\w+", "")), 
            mc.cores=1) %>% # remove twitter handles
     tm_map(removeNumbers, mc.cores=1) %>%
-    tm_map(removeWords, c('trump','realdonaldtrump'), mc.cores=1) %>%
-    tm_map(stemDocument) %>%
+    tm_map(stemDocument, mc.cores=1) %>%
     tm_map(stripWhitespace, mc.cores=1)
 
 save(textdata, file = 'data/testdata_corpus.RData') 
