@@ -84,7 +84,6 @@ searchstring <- 'microsoft'
 rm(statuses)
 for(i in 1:length(files)) {
     selectedfile <- paste0('data/',files[i])
-    print(selectedfile)
     if(!exists('statuses')){
         statuses <- readRDS(file=selectedfile)
     }else{
