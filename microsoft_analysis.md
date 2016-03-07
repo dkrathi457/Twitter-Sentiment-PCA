@@ -15,6 +15,7 @@ The ultimate goal of any analysis is to be able to predict some quantity of inte
 Load up required packages:
 
 ```r
+library(ggplot2)
 library(twitteR)
 library(tm)
 library(rjson)
@@ -128,8 +129,7 @@ textdata <-
     tm_map(content_transformer(function(x) str_replace_all(x, "@\\w+", "")), 
            mc.cores=1) %>% # remove twitter handles
     tm_map(removeNumbers, mc.cores=1) %>%
-    tm_map(removeWords, c('trump','realdonaldtrump'), mc.cores=1) %>%
-    tm_map(stemDocument) %>%
+    tm_map(stemDocument, mc.cores=1) %>%
     tm_map(stripWhitespace, mc.cores=1)
 
 save(textdata, file = 'data/testdata_corpus.RData') 
@@ -141,8 +141,17 @@ rm(textdata)
 load('data/testdata_corpus.RData') 
 ```
 
+A quick wordcloud of the tweets reveals the 100 key words used:
 
-I also perform a sentiment analysis on the text data by comparing the words with those from the [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), which assigns them two 8 emotions (eg, anger, joy, etc) and 2 sentiments (postive and negative). I create a new variable, positivity, which is the difference between the positive and negative sentiments.
+```r
+pal2 <- brewer.pal(8,"RdBu")
+wordcloud(textdata, max.words = 100, colors= pal2, random.order=F, 
+          rot.per=0.1, use.r.layout=F)
+```
+
+![](microsoft_analysis_files/figure-html/wordcloud-1.png) 
+
+I perform a sentiment analysis on the text data by comparing the words with those from the [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), which assigns them two 8 emotions (eg, anger, joy, etc) and 2 sentiments (postive and negative). I create a new variable, positivity, which is the difference between the positive and negative sentiments.
 
 ```r
 sentiments <- sapply(textdata, function(x) get_nrc_sentiment(as.character(x)))
@@ -153,16 +162,6 @@ sentiments <-
     sentiments %>%
     mutate(positivity = positive - negative)
 ```
-
-A quick wordcloud of the tweets reveals the 100 key words used:
-
-```r
-pal2 <- brewer.pal(8,"RdBu")
-wordcloud(textdata, max.words = 100, colors= pal2, random.order=F, 
-          rot.per=0.1, use.r.layout=F)
-```
-
-![](microsoft_analysis_files/figure-html/wordcloud-1.png) 
 
 And here are the emotions expressed in these tweets:
 
@@ -238,7 +237,7 @@ load('data/tweets.RData')
 
 ## Principal Component Analysis
 
-Perform a principal component analysis on the tweet data set and join the information (first 5 components) to the original status array.
+I'll now perform a principal component analysis on the tweet data set and join the information (first 5 components) to the original status array. This will allow me to reduce the number of paramaters to consider. That is, rather than considering each word individually, I can consider the linear combination of all words with appropriate loading factors that effectively group them by phrases.
 
 ```r
 trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
@@ -246,7 +245,7 @@ pca <- predict(trans, tweets[,2:ncol(tweets)])
 statuses <- cbind(statuses, pca[,1:5], sentiments)
 ```
 
-I now examine the reprojected data:
+Let's examine the reprojected data:
 
 ```r
 pal2 <- brewer.pal(10,"RdBu")
@@ -281,7 +280,6 @@ statuses <-
     filter(PC2>cut2[1] & PC2<cut2[2])
 ```
 
-
 The loading factors reveal how important each term is to the principal component axes. Here are the top few terms of the first two components:
 
 ```r
@@ -294,45 +292,117 @@ load_sqr <- cbind(temp, load_sqr)
 load_sqr %>%
     select(term, PC1) %>%
     arrange(desc(PC1)) %>%
-    head(10) %>% kable
+    head(10) %>% kable(format='html')
 ```
 
-
-
-term             PC1
---------  ----------
-restor     0.0983066
-slam       0.0977344
-epic       0.0971905
-faith      0.0969293
-human      0.0939914
-ballmer    0.0914452
-steve      0.0911956
-dunk       0.0891933
-former     0.0891634
-ceo        0.0869296
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> term </th>
+   <th style="text-align:right;"> PC1 </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> restor </td>
+   <td style="text-align:right;"> 0.0983066 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> slam </td>
+   <td style="text-align:right;"> 0.0977344 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> epic </td>
+   <td style="text-align:right;"> 0.0971905 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> faith </td>
+   <td style="text-align:right;"> 0.0969293 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> human </td>
+   <td style="text-align:right;"> 0.0939914 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> ballmer </td>
+   <td style="text-align:right;"> 0.0914452 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> steve </td>
+   <td style="text-align:right;"> 0.0911956 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> dunk </td>
+   <td style="text-align:right;"> 0.0891933 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> former </td>
+   <td style="text-align:right;"> 0.0891634 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> ceo </td>
+   <td style="text-align:right;"> 0.0869296 </td>
+  </tr>
+</tbody>
+</table>
 
 ```r
 load_sqr %>%
     select(term, PC2) %>%
     arrange(desc(PC2)) %>%
-    head(10) %>% kable
+    head(10) %>% kable(format='html')
 ```
 
-
-
-term              PC2
----------  ----------
-fun         0.1589405
-csrrace     0.1557036
-have        0.1487819
-join        0.1443763
-play        0.1277830
-free        0.1087408
-window      0.0359545
-hololen     0.0129898
-develop     0.0115247
-preorder    0.0098478
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> term </th>
+   <th style="text-align:right;"> PC2 </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> fun </td>
+   <td style="text-align:right;"> 0.1589405 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> csrrace </td>
+   <td style="text-align:right;"> 0.1557036 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> have </td>
+   <td style="text-align:right;"> 0.1487819 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> join </td>
+   <td style="text-align:right;"> 0.1443763 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> play </td>
+   <td style="text-align:right;"> 0.1277830 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> free </td>
+   <td style="text-align:right;"> 0.1087408 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> window </td>
+   <td style="text-align:right;"> 0.0359545 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> hololen </td>
+   <td style="text-align:right;"> 0.0129898 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> develop </td>
+   <td style="text-align:right;"> 0.0115247 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> preorder </td>
+   <td style="text-align:right;"> 0.0098478 </td>
+  </tr>
+</tbody>
+</table>
 
 I've created a function to sample tweets across the PC spectrum.
 
@@ -350,60 +420,7 @@ tweet_check <- function(text, pc, numbreaks=5){
 }
 ```
 
-Here are the results for PC1:
-
-```r
-tweet_check(statuses$text, statuses$PC1, 10) %>% kable(format='html')
-```
-
-<table>
- <thead>
-  <tr>
-   <th style="text-align:left;"> pc_val </th>
-   <th style="text-align:left;"> text </th>
-  </tr>
- </thead>
-<tbody>
-  <tr>
-   <td style="text-align:left;"> (-15.2,-13.6] </td>
-   <td style="text-align:left;"> Former Microsoft CEO Steve Ballmer's epic slam dunk will restore your faith in humanity https://t.co/3hG1xHevnX via @mashable </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-13.6,-11.9] </td>
-   <td style="text-align:left;"> DigitalLife: Former Microsoft CEO Steve Ballmer's epic slam dunk will restore your faith in huma... https://t.co/pzOBFJzqDR #ICTChallenge </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-11.9,-10.3] </td>
-   <td style="text-align:left;"> Former Microsoft CEO Steve Ballmers epic slam dunk will restore your fai... https://t.co/FCZkoPWBIv #business #money https://t.co/GCwP8QWUAd </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-10.3,-8.61] </td>
-   <td style="text-align:left;"> Former Microsoft CEO Steve Ballmer's epic slam dunk will… https://t.co/eIcrzOig6o #LosAngelesClippers #SteveBallmer #Microsoft #Buisness </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-6.96,-5.31] </td>
-   <td style="text-align:left;"> And, Uh, Here's Former Microsoft CEO Steve Ballmer Dunking https://t.co/DVsKjwmOA9 https://t.co/mN9eJG2M8i </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-5.31,-3.66] </td>
-   <td style="text-align:left;"> Damn, Ballmer. The former Microsoft CEO is at it again with an amazing dunk. https://t.co/sR4I023VzZ … https://t.co/DuKE43dxl7 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-3.66,-2.01] </td>
-   <td style="text-align:left;"> Ballmer's dunk is hilarious https://t.co/4pDlmi8WEf </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-2.01,-0.365] </td>
-   <td style="text-align:left;"> Microsoft Windows Shop Slammed For Trying To Merge Gaming Ecosystem: Microsoft who is set to roll out a TV in ... https://t.co/wovRQXqKVo </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-0.365,1.3] </td>
-   <td style="text-align:left;"> Pardon my French, but if the Xbox One is going to become even MORE like a PC then Microsoft can fuck right off. </td>
-  </tr>
-</tbody>
-</table>
-
-And here are the results for PC2:
+After examining some of the results, I found an interesting trend for PC2:
 
 ```r
 set.seed(42)
@@ -461,62 +478,11 @@ tweet_check(statuses$text, statuses$PC2, 10) %>% kable(format='html')
 </tbody>
 </table>
 
-Finally, let's have a look at tweets grouped by positivity score:
-
-```r
-tweet_check(statuses$text, statuses$positivity, 10) %>% kable(format='html')
-```
-
-<table>
- <thead>
-  <tr>
-   <th style="text-align:left;"> pc_val </th>
-   <th style="text-align:left;"> text </th>
-  </tr>
- </thead>
-<tbody>
-  <tr>
-   <td style="text-align:left;"> (-4.01,-3.2] </td>
-   <td style="text-align:left;"> microsoft, while kicking conker in the crotch: conker is a much beloved property. *begins shooting him with a gun* beloved *murders him* be </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-3.2,-2.4] </td>
-   <td style="text-align:left;"> Windows 10 is shit and Microsoft can suck my taint. </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-2.4,-1.6] </td>
-   <td style="text-align:left;"> Microsoft Attacks Apple, Google Crashes a Car Into a Bus… [Tech News Digest] https://t.co/3PMdcpCLeE https://t.co/a3mzFGTn78 </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-1.6,-0.8] </td>
-   <td style="text-align:left;"> Microsoft acquisition opens door for cross platform mobile appdev, by @jrdothoughts from @CIOonline @IDGCN https://t.co/HqbLJ6IXMW </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (-0.8,0] </td>
-   <td style="text-align:left;"> Microsoft highlights what Macs can’t do in new Windows 10 buggy ad https://t.co/7auGC50Vfo via @verge </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (0.8,1.6] </td>
-   <td style="text-align:left;"> Display live updating data from your desktop Microsoft #Excel spreadsheets in your #WordPress blog. https://t.co/TLfdCcPH7G #WordPress </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (1.6,2.4] </td>
-   <td style="text-align:left;"> Hands-on: Microsoft Lumia 550 second impressions; the best budget Lumia offering to date https://t.co/uRu0Wjrajp https://t.co/UqglYKnKjZ </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (2.4,3.2] </td>
-   <td style="text-align:left;"> February 29th, 2016: I've learned how to correctly spell &quot;particularly&quot; without assistance from Microsoft Word and/or Google </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> (3.2,4.01] </td>
-   <td style="text-align:left;"> Applied Microsoft Excel Course: Learn to master the commonly used functions and formulas in Microsoft Excel. https://t.co/TRzytt6RSi </td>
-  </tr>
-</tbody>
-</table>
+I notice that low PC2 values tend to be about the Xbox and high PC2 values tend to be about the Hololens. This presents a possible avenue for the predictive analysis. If I can devise a model to predict the value of PC2 based on a Twitter user's data, I'll know which product they are more excited about.
 
 ## Gather User Data
 
-Now, I gather all the user data for each particular tweet.
+To carry out my models, I'll need a lot more information. I gather all the user data for each particular tweet.
 
 ```r
 userlist <- sapply(unique(statuses$user), as.character)
@@ -546,7 +512,7 @@ save(userinfo, file='data/userinfo.Rdata')
 load('data/userinfo.Rdata')
 ```
 
-The original tweets are grouped together by user (taking averages of the relevant quantities of interest) and then joined together to the user information data frame:
+The original tweets will now be grouped together by user (taking averages of the relevant quantities of interest) and then joined together to the user information data frame:
 
 ```r
 newstatuses <-
@@ -573,8 +539,7 @@ alldata <- inner_join(userinfo, newstatuses, by='user')
 
 ### Setup
 
-I'll now decide on the quantity to predict and clean up the table to be able to run my models.
-I'll choose to examine the 2nd principal component, but this can readily be changed to the other components or the positivity.
+As described above, high and low values for the 2nd principal component appears to be related to a user's tweeting about the Xbox or Hololens. As such, I'll select it for my predictive analysis. This can readily be changed to another principal component, or the results of the sentiment analysis, for other studies.
 
 ```r
 possiblepreds <- c('PC1','PC2','PC3','PC4','PC5')
@@ -603,9 +568,9 @@ df_filter <- df[, -nzv]
 df_filter <- na.omit(df_filter)
 ```
 
-There are now only 9 parameters, including PC2.
+There are now only 9 parameters, including PC2, for our 7944 users.
 
-I now prepare my training and test data sets:
+I'll now prepare my training and test data sets:
 
 ```r
 set.seed(3456)
@@ -650,8 +615,10 @@ I next run a generalized linear model:
 toRun <- formula(paste0(choice,' ~ .'))
 rtTune2 <- train(toRun, data = df_train, method = "glm")
 
-glm_summary <- summary(rtTune2)
+summary(rtTune2)
 ```
+
+The summary suggests the most significant quantities to predict the values of PC2 are the number of statuses (ie, tweets) and the positivity value. 
 
 As before, we save the results for future comparison:
 
@@ -802,6 +769,7 @@ modelSummary %>% kable(format='html')
 </tbody>
 </table>
 
+All models perform comparably similar with regards to the RMSE. As I discuss below, there may be a few ways to improve the models in order to yield more accurate results.
 
 ## Summary
 
@@ -822,48 +790,8 @@ The above suggests that users with very negative PC2 values (associated with exc
 
 On the other hand, for higher PC2 values (associated with excitement about the Hololens product), we can see more meaningful information. The value of PC2 for a user depends on the postivity, which is a measure on how often positive and negative words are used; the number of statuses or tweets they've had; the number of lists they follow; and the number of favorites they have.
 
-We can also have a look at the summary of results for the generalized linear model:
-
-```r
-glm_summary
-```
-
-```
-## 
-## Call:
-## NULL
-## 
-## Deviance Residuals: 
-##     Min       1Q   Median       3Q      Max  
-## -4.7862  -0.1446   0.0531   0.2858   2.1457  
-## 
-## Coefficients:
-##                  Estimate Std. Error t value Pr(>|t|)    
-## (Intercept)     3.224e-01  2.039e-02  15.807  < 2e-16 ***
-## numstatuses    -3.985e-07  7.850e-08  -5.077 3.94e-07 ***
-## followers      -5.819e-08  8.663e-08  -0.672    0.502    
-## friends         2.743e-06  1.776e-06   1.545    0.122    
-## favorites      -3.623e-07  1.051e-06  -0.345    0.730    
-## numlists        1.041e-05  7.607e-06   1.368    0.171    
-## twitter_years   2.088e-03  3.948e-03   0.529    0.597    
-## numTopicTweets -2.412e-03  4.920e-03  -0.490    0.624    
-## positivity      9.551e-02  1.116e-02   8.559  < 2e-16 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## (Dispersion parameter for gaussian family taken to be 0.6228807)
-## 
-##     Null deviance: 4019.6  on 6354  degrees of freedom
-## Residual deviance: 3952.8  on 6346  degrees of freedom
-## AIC: 15037
-## 
-## Number of Fisher Scoring iterations: 2
-```
-
-This suggests the most significant quantities to predict the values of PC2 are the number of statuses or tweets and the positivity value. 
-
 While these models can predict the values of PC2, their errors remain fairly large. I interpret this as the PC2 value having large variation in terms of the word choices used to construct the individual tweets.
-A possible way to improve this model would be to consider more parameters given that we have enough data to support this. These additional parameters could come from twitter, or from additional sources.
+A possible way to improve these models would be to consider more parameters given that we have enough data to support this. These additional parameters could come from twitter or from external sources.
 Another possibility is to re-examine our source of data. Rather than gathering 'recent' tweets, we could have gathered 'popuplar' or 'mixed' tweets, which would rely on Twitter's algorithms to return a different sample of tweets. 
 Yet another possibility would be to consider a different API, such as gathering data from Facebook.
 

@@ -122,8 +122,14 @@ rm(textdata)
 load('data/testdata_corpus.RData') 
 ```
 
+A quick wordcloud of the tweets reveals the 100 key words used:
+```{r wordcloud}
+pal2 <- brewer.pal(8,"RdBu")
+wordcloud(textdata, max.words = 100, colors= pal2, random.order=F, 
+          rot.per=0.1, use.r.layout=F)
+```
 
-I also perform a sentiment analysis on the text data by comparing the words with those from the [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), which assigns them two 8 emotions (eg, anger, joy, etc) and 2 sentiments (postive and negative). I create a new variable, positivity, which is the difference between the positive and negative sentiments.
+I perform a sentiment analysis on the text data by comparing the words with those from the [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), which assigns them two 8 emotions (eg, anger, joy, etc) and 2 sentiments (postive and negative). I create a new variable, positivity, which is the difference between the positive and negative sentiments.
 ```{r sentiment, eval=T, cache=T}
 sentiments <- sapply(textdata, function(x) get_nrc_sentiment(as.character(x)))
 
@@ -132,13 +138,6 @@ sentiments <- as.data.frame(lapply(sentiments, as.numeric)) # a bit more to orga
 sentiments <-
     sentiments %>%
     mutate(positivity = positive - negative)
-```
-
-A quick wordcloud of the tweets reveals the 100 key words used:
-```{r wordcloud}
-pal2 <- brewer.pal(8,"RdBu")
-wordcloud(textdata, max.words = 100, colors= pal2, random.order=F, 
-          rot.per=0.1, use.r.layout=F)
 ```
 
 And here are the emotions expressed in these tweets:
@@ -197,14 +196,14 @@ load('data/tweets.RData')
 
 ## Principal Component Analysis
 
-Perform a principal component analysis on the tweet data set and join the information (first 5 components) to the original status array.
+I'll now perform a principal component analysis on the tweet data set and join the information (first 5 components) to the original status array. This will allow me to reduce the number of paramaters to consider. That is, rather than considering each word individually, I can consider the linear combination of all words with appropriate loading factors that effectively group them by phrases.
 ```{r runpca, cache=T}
 trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
 pca <- predict(trans, tweets[,2:ncol(tweets)])
 statuses <- cbind(statuses, pca[,1:5], sentiments)
 ```
 
-I now examine the reprojected data:
+Let's examine the reprojected data:
 ```{r pca1-2_plot}
 pal2 <- brewer.pal(10,"RdBu")
 ggplot(statuses, aes(x=PC1, y=PC2)) + 
@@ -232,7 +231,6 @@ statuses <-
     filter(PC2>cut2[1] & PC2<cut2[2])
 ```
 
-
 The loading factors reveal how important each term is to the principal component axes. Here are the top few terms of the first two components:
 ```{r}
 loadings <- trans$rotation 
@@ -244,12 +242,12 @@ load_sqr <- cbind(temp, load_sqr)
 load_sqr %>%
     select(term, PC1) %>%
     arrange(desc(PC1)) %>%
-    head(10) %>% kable
+    head(10) %>% kable(format='html')
 
 load_sqr %>%
     select(term, PC2) %>%
     arrange(desc(PC2)) %>%
-    head(10) %>% kable
+    head(10) %>% kable(format='html')
 ```
 
 I've created a function to sample tweets across the PC spectrum.
@@ -267,25 +265,17 @@ tweet_check <- function(text, pc, numbreaks=5){
 }
 ```
 
-Here are the results for PC1:
-```{r}
-tweet_check(statuses$text, statuses$PC1, 10) %>% kable(format='html')
-```
-
-And here are the results for PC2:
+After examining some of the results, I found an interesting trend for PC2:
 ```{r}
 set.seed(42)
 tweet_check(statuses$text, statuses$PC2, 10) %>% kable(format='html')
 ```
 
-Finally, let's have a look at tweets grouped by positivity score:
-```{r}
-tweet_check(statuses$text, statuses$positivity, 10) %>% kable(format='html')
-```
+I notice that low PC2 values tend to be about the Xbox and high PC2 values tend to be about the Hololens. This presents a possible avenue for the predictive analysis. If I can devise a model to predict the value of PC2 based on a Twitter user's data, I'll know which product they are more excited about.
 
 ## Gather User Data
 
-Now, I gather all the user data for each particular tweet.
+To carry out my models, I'll need a lot more information. I gather all the user data for each particular tweet.
 ```{r gather_users, cache=T, eval=F}
 userlist <- sapply(unique(statuses$user), as.character)
 allusers <- lookupUsers(userlist)
@@ -313,7 +303,7 @@ save(userinfo, file='data/userinfo.Rdata')
 load('data/userinfo.Rdata')
 ```
 
-The original tweets are grouped together by user (taking averages of the relevant quantities of interest) and then joined together to the user information data frame:
+The original tweets will now be grouped together by user (taking averages of the relevant quantities of interest) and then joined together to the user information data frame:
 ```{r jointables, cache=F}
 newstatuses <-
     statuses %>%
@@ -339,8 +329,7 @@ alldata <- inner_join(userinfo, newstatuses, by='user')
 
 ### Setup
 
-I'll now decide on the quantity to predict and clean up the table to be able to run my models.
-I'll choose to examine the 2nd principal component, but this can readily be changed to the other components or the positivity.
+As described above, high and low values for the 2nd principal component appears to be related to a user's tweeting about the Xbox or Hololens. As such, I'll select it for my predictive analysis. This can readily be changed to another principal component, or the results of the sentiment analysis, for other studies.
 ```{r}
 possiblepreds <- c('PC1','PC2','PC3','PC4','PC5')
 choice <- 'PC2'
@@ -367,9 +356,9 @@ df_filter <- df[, -nzv]
 df_filter <- na.omit(df_filter)
 ```
 
-There are now only `r ncol(df_filter)` parameters, including PC2.
+There are now only `r ncol(df_filter)` parameters, including PC2, for our `r nrow(df_filter)` users.
 
-I now prepare my training and test data sets:
+I'll now prepare my training and test data sets:
 ```{r}
 set.seed(3456)
 trainIndex <- sample(nrow(df_filter), nrow(df_filter)*0.8)
@@ -410,8 +399,10 @@ I next run a generalized linear model:
 toRun <- formula(paste0(choice,' ~ .'))
 rtTune2 <- train(toRun, data = df_train, method = "glm")
 
-glm_summary <- summary(rtTune2)
+summary(rtTune2)
 ```
+
+The summary suggests the most significant quantities to predict the values of PC2 are the number of statuses (ie, tweets) and the positivity value. 
 
 As before, we save the results for future comparison:
 ```{r}
@@ -511,6 +502,7 @@ Here is a table of the root mean square errors (RMSE), a measure of the goodness
 modelSummary %>% kable(format='html')
 ```
 
+All models perform comparably similar with regards to the RMSE. As I discuss below, there may be a few ways to improve the models in order to yield more accurate results.
 
 ## Summary
 
@@ -528,15 +520,8 @@ The above suggests that users with very negative PC2 values (associated with exc
 
 On the other hand, for higher PC2 values (associated with excitement about the Hololens product), we can see more meaningful information. The value of PC2 for a user depends on the postivity, which is a measure on how often positive and negative words are used; the number of statuses or tweets they've had; the number of lists they follow; and the number of favorites they have.
 
-We can also have a look at the summary of results for the generalized linear model:
-```{r}
-glm_summary
-```
-
-This suggests the most significant quantities to predict the values of PC2 are the number of statuses or tweets and the positivity value. 
-
 While these models can predict the values of PC2, their errors remain fairly large. I interpret this as the PC2 value having large variation in terms of the word choices used to construct the individual tweets.
-A possible way to improve this model would be to consider more parameters given that we have enough data to support this. These additional parameters could come from twitter, or from additional sources.
+A possible way to improve these models would be to consider more parameters given that we have enough data to support this. These additional parameters could come from twitter or from external sources.
 Another possibility is to re-examine our source of data. Rather than gathering 'recent' tweets, we could have gathered 'popuplar' or 'mixed' tweets, which would rely on Twitter's algorithms to return a different sample of tweets. 
 Yet another possibility would be to consider a different API, such as gathering data from Facebook.
 
