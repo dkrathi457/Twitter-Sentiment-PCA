@@ -1,0 +1,206 @@
+---
+title: "Analysis of Twitter Data"
+author: "David Rodriguez"
+date: "March 7, 2016"
+output: 
+   ioslides_presentation:
+     css: styleguide.css
+     keep_md: yes
+runtime: shiny
+---
+
+```{r message=F, warning=F, echo=F}
+library(ggplot2)
+#library(twitteR)
+#library(tm)
+#library(rjson)
+library(wordcloud)
+library(dplyr)
+library(caret)
+library(knitr)
+library(RColorBrewer)
+#library(stringr)
+library(syuzhet) # for sentiment analysis
+library(rattle)
+#library(lubridate)
+library(rpart)
+#library(randomForest)
+#library(glmnet)
+```
+
+## Introduction
+
+Twitter is a powerful tool that enables users to communicate with others and also empowers data scientists with large quantities of data they can use.
+
+I created a Twitter Application on their developer website in order to access the Twitter API and search for tweets within R.
+
+For this project, I performed a Sentiment and Principal Component Analysis for tweets with the search term 'microsoft'. These tweets were gathered over a period of a few days and re-tweets were removed.
+
+## Twitter Data {.flexbox .vcenter}
+
+```{r loadtweets, eval=T, echo=F, cache=T}
+files <- list.files('data','tweets_')
+searchstring <- 'microsoft'
+for(i in 1:length(files)) {
+    selectedfile <- paste0('data/',files[i])
+    if(!exists('statuses')){
+        statuses <- readRDS(file=selectedfile)
+    }else{
+        statuses <- rbind(statuses, readRDS(file=selectedfile))
+    }
+}
+```
+
+For this analysis, I have chosen to gather recent English-language tweets containing the word 'microsoft'.
+
+```{r wordcloud, cache=T, echo=F, fig.width=6, fig.height=4}
+load('data/testdata_corpus.RData') 
+
+wordcloud(textdata, max.words = 100, colors=brewer.pal(8,"RdBu"), random.order=F, 
+          rot.per=0, use.r.layout=T)
+```
+
+
+Total number of tweets to process is `r nrow(statuses)`
+
+## Sentiment Analysis {.flexbox .vcenter}
+
+Sentiment analysis on the text data by comparing words with those from the [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), which assigns them two 8 emotions (eg, anger, joy, etc) and 2 sentiments (postive and negative).
+
+```{r sentiment, cache=T, echo=F, fig.width=6.5, fig.height=3.5}
+sentiments <- sapply(textdata, function(x) get_nrc_sentiment(as.character(x)))
+
+sentiments <- as.data.frame(aperm(sentiments)) # transpose and save as dataframe
+sentiments <- as.data.frame(lapply(sentiments, as.numeric)) # a bit more to organize
+sentiments <-
+    sentiments %>%
+    mutate(positivity = positive - negative)
+
+emotions <- data.frame("count"=colSums(sentiments[,c(1:8)]))
+emotions <- cbind("sentiment" = rownames(emotions), emotions)
+
+ggplot(data = emotions, aes(x = sentiment, y = count)) +
+    geom_bar(aes(fill = sentiment), stat = "identity") +
+    xlab("Emotion") + ylab("Total Count") + 
+    scale_fill_brewer(palette='RdBu') + 
+    theme_bw() + theme(legend.position='none')
+```
+
+## Principal Component Analysis {.flexbox .vcenter}
+
+The Principal Component Analysis reduces the number of parameters to consider by creating new ones that explains a good fraction fo the variance. 
+For this study, this represents *phrases* of words rather than the words themselves.
+
+```{r pca, echo=F, cache=T, fig.width=6.5, fig.height=3.5}
+load('data/tweets.RData') 
+
+trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
+pca <- predict(trans, tweets[,2:ncol(tweets)])
+statuses <- cbind(statuses, pca[,1:5], sentiments)
+
+ggplot(statuses, aes(x=PC2, y=PC3)) + 
+    geom_point(aes(fill=positivity), size=4, alpha=0.7, pch=21, stroke=1.3) + 
+    scale_fill_gradientn(colours=brewer.pal(10,"RdBu"), limits=c(-5,5)) + theme_bw()
+```
+
+
+## Sample Tweets {.smaller .nice_table}
+
+```{r outlier_cuts, echo=F, cache=T}
+cutlevel <- 2/100.
+cut1 <- quantile(statuses$PC1, probs=c(cutlevel,1-cutlevel))
+cut2 <- quantile(statuses$PC2, probs=c(cutlevel,1-cutlevel))
+
+statuses <- 
+    statuses %>%
+    filter(PC1>cut1[1] & PC1<cut1[2]) %>%
+    filter(PC2>cut2[1] & PC2<cut2[2])
+```
+
+```{r sample_tweets, echo=F, cache=T}
+set.seed(42)
+tweet_check <- function(text, pc, numbreaks=5){
+    cuts <- cut(pc, numbreaks)
+    #cuts <- cut(pc, breaks=quantile(pc, probs=seq(0,1,1/numbreaks)))
+    temp <- data.frame(text=text, pc=pc, pc_val=cuts)
+    temp <- temp %>%
+        group_by(pc_val) %>%
+        summarise(text=iconv(sample(text,1), to='UTF-8-MAC', sub='byte')) %>%
+        filter(!is.na(pc_val))
+    return(temp)
+}
+
+temp <- tweet_check(statuses$text, statuses$PC2, 10) 
+colnames(temp) <- c('PC Value','Tweet Text')
+temp %>% kable(format='html')
+```
+
+<br>
+
+This suggest a trend: low values tend to be about Xbox, high values tend to be about Hololens
+
+## Predictive Analysis {.nice_plot}
+
+```{r data_load, cache=T, echo=F}
+load('data/userinfo.Rdata')
+
+newstatuses <-
+    statuses %>%
+    group_by(user) %>%
+    summarize(numTopicTweets=n(),
+              positivity=mean(positivity),
+              PC2=mean(PC2)) %>% 
+    mutate(user=as.character(user))
+
+# Join the data together
+df <- inner_join(userinfo, newstatuses, by='user')
+
+choice <- 'PC2'
+
+nzv <- nearZeroVar(df)
+df_filter <- df[, -nzv]
+df_filter <- na.omit(df_filter)
+```
+
+
+I attempt to predict values of PC2 by gathering information from twitter.   
+I consider `r ncol(df_filter)` parameters, including PC2, for `r nrow(df_filter)` users.
+
+![image](microsoft_analysis_files/figure-html/rmse_plot-1.png)
+
+[//]: ( While these models can predict the values of PC2, their errors remain fairly large. I interpret this as the PC2 value having large variation in terms of the word choices used to construct the individual tweets. A possible way to improve these models would be to consider more parameters given that we have enough data to support this. These additional parameters could come from twitter or from external sources. Another possibility is to re-examine our source of data. Rather than gathering 'recent' tweets, we could have gathered 'popuplar' or 'mixed' tweets, which would rely on Twitter's algorithms to return a different sample of tweets. Yet another possibility would be to consider a different API, such as gathering data from Facebook. )
+
+## Discussion {.nice_plot}
+
+Regression Tree results
+
+![image](microsoft_analysis_files/figure-html/rt_plot-1.png)
+
+[//]: (The above suggests that users with very negative PC2 values (associated with excitement about the Xbox product) also have very few followers and have been on Twitter a very small amount of time. This suggest these types of users are actually Twitter robot accounts created to spam advertisement on this particular Xbox news story. I would argue it's safe to disregard spending any advertising efforts on these users.)
+
+[//]: (On the other hand, for higher PC2 values (associated with excitement about the Hololens product), we can see more meaningful information. The value of PC2 for a user depends on the postivity, which is a measure on how often positive and negative words are used; the number of statuses or tweets they've had; the number of lists they follow; and the number of favorites they have.)
+
+## Conclusions
+
+I presented a way to explore trends in Twitter data using a Principal Component Analysis on the most common terms and a Sentiment Analysis on the words used.
+
+While this project demonstrated a potential relationship between word choice and differentiation between Microsoft products, it can readily be expanded to any other topic of interest. 
+
+However, given the varied nature of tweeted topics within a search, it is not always clear that a trend can or will emerge.
+
+Additional parameters can be used to reduce the RMSE in the models.
+
+----
+
+```{r shinyApp_init, echo=F, eval=T, warning=F, message=F, results='hide'}
+source("/Users/strakul/software/r/shiny_twitter/global.R")
+```
+
+
+```{r shinyApp, echo=F, eval=T, warning=F, message=F}
+library(shiny)
+shinyAppDir("/Users/strakul/software/r/shiny_twitter",
+            options=list(width="100%", height=700)
+            )
+```
+

@@ -1,0 +1,41 @@
+.nice_table table{
+    border-collapse: collapse;
+        border-spacing: 0;
+	width:100%;
+	height:100%;
+	margin:0;padding:0;
+}
+
+.nice_table tr:nth-child(odd){ background-color:#e5e5e5; }
+.nice_table tr:nth-child(even){ background-color:#ffffff; }
+
+.nice_table td{
+	vertical-align:middle;
+	border:1px solid #000000;
+	border-width:1px 1px 1px 1px;
+	text-align:left;
+	padding:5px;
+	font-size:10px;
+	font-family:Arial;
+	font-weight:normal;
+	color:#000000;
+}
+
+.nice_table th{
+    background-color:#005fbf;
+	border:1px solid #000000;
+	text-align:center;
+	border-width: 1px;
+	font-size:14px;
+	font-family:Arial;
+	font-weight:bold;
+	color:#ffffff;
+}
+
+.nice_plot img {
+  width: 550px;
+  height: 350px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
