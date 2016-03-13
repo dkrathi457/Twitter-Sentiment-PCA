@@ -1,7 +1,7 @@
 ---
-title: "Analysis of Twitter Data"
+title: "Sentiment and Principal Component Analysis of Twitter Data"
 author: "David Rodriguez"
-date: "March 7, 2016"
+date: "March 15, 2016"
 output: 
    ioslides_presentation:
      css: styleguide.css
@@ -88,8 +88,7 @@ ggplot(data = emotions, aes(x = sentiment, y = count)) +
 
 ## Principal Component Analysis {.flexbox .vcenter}
 
-The Principal Component Analysis reduces the number of parameters to consider by creating new ones that explains a good fraction fo the variance. 
-For this study, this represents *phrases* of words rather than the words themselves.
+The Principal Component Analysis reduces the number of parameters to consider by creating new ones that explains a good fraction fo the variance. For this study, this represents *phrases* of words rather than the words themselves.
 
 ```{r pca, echo=F, cache=T, fig.width=6.5, fig.height=3.5}
 load('data/tweets.RData') 
