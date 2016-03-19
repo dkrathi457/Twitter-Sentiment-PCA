@@ -46,7 +46,6 @@ textdata <-
     tm_map(content_transformer(function(x) str_replace_all(x, "@\\w+", "")), 
            mc.cores=1) %>% # remove twitter handles
     tm_map(removeNumbers, mc.cores=1) %>%
-    tm_map(removeWords, c('trump','realdonaldtrump'), mc.cores=1) %>%
     tm_map(stemDocument) %>%
     tm_map(stripWhitespace, mc.cores=1)
 
@@ -77,6 +76,7 @@ words$count <- colSums(dtm)
 
 words <-
     words %>%
+    mutate(freq = count/nrow(statuses)) %>%
     arrange(desc(count))
 head(words)
 
@@ -85,7 +85,10 @@ ind <- data.frame('id'=seq.int(nrow(tweets)))
 tweets <- cbind(ind, tweets)
 rm(dtm, textdata) # clearing up memory
 
-words_100 <- as.character(words[2:101,'term'])
+# Eliminate very common terms (like the search term)
+numToCut <- max(1, sum(words$freq>0.9))
+#words_100 <- as.character(words[2:101,'term'])
+words_100 <- as.character(words[1+numToCut:100+numToCut,'term'])
 
 tweets <- tweets[,c('id',words_100)]
 head(tweets[,1:10])
