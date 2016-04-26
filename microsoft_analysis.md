@@ -6,9 +6,10 @@ February 24, 2016
 
 Twitter is a powerful tool that enables users to communicate with others and also empowers data scientists with large quantities of data they can use. Communications on twitter are live and dynamic, changing every second. They are also short, limited to 140 characters. The analysis of such short, fast-moving data can reveal how people communicate on a particular subject.
 
-For this analysis, I have chosen to gather recent English-language tweets containing the word 'microsoft'. This allows me to explore how people regard the microsoft brand, as well as how they treat any news articles referring to microsoft. In practice, this methodology can be employed to any other broadly tweeted topic, including politics and popular culture.
+For example, by mining Twitter search data one can explore trends of stock prices against sentiments or specific words. One can also explore what makes a popular tweet, an excersize that can lead to efficient social media marketing. One can also compare tweets for different search terms, such as for different companies, and identfy what makes people excited about them or what their more prominent complaints are.
 
-The ultimate goal of any analysis is to be able to predict some quantity of interest. For my purposes, I wished to examine if I could predict how users would tweet about the specified subject based on information publicly available from Twitter.
+For this analysis, I have chosen to gather recent English-language tweets containing the word 'microsoft'. This allows me to explore how people regard the microsoft brand, as well as how they treat any news articles referring to microsoft. 
+The end goal of my study was to attempt to **predict how users would tweet about the specified subject** based on user information publicly available for Twitter accounts.
 
 ## Experiment Setup
 
@@ -96,18 +97,12 @@ rm(statuses)
 ```r
 for(i in 1:length(files)) {
     selectedfile <- paste0('data/',files[i])
-    print(selectedfile)
     if(!exists('statuses')){
         statuses <- readRDS(file=selectedfile)
     }else{
         statuses <- rbind(statuses, readRDS(file=selectedfile))
     }
 }
-```
-
-```
-## [1] "data/tweets_microsoft_6364_2016-02-29.Rda"
-## [1] "data/tweets_microsoft_6768_2016-03-01.Rda"
 ```
 
 Total number of tweets to process is 13132
@@ -141,7 +136,7 @@ rm(textdata)
 load('data/testdata_corpus.RData') 
 ```
 
-A quick wordcloud of the tweets reveals the 100 key words used:
+A quick wordcloud of the tweets reveals the 100 most commonly used words:
 
 ```r
 pal2 <- brewer.pal(8,"RdBu")
@@ -151,7 +146,7 @@ wordcloud(textdata, max.words = 100, colors= pal2, random.order=F,
 
 ![](microsoft_analysis_files/figure-html/wordcloud-1.png) 
 
-I perform a sentiment analysis on the text data by comparing the words with those from the [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), which assigns them two 8 emotions (eg, anger, joy, etc) and 2 sentiments (postive and negative). I create a new variable, positivity, which is the difference between the positive and negative sentiments.
+I perform a sentiment analysis on the text data by comparing the words with those from the [NRC Word-Emotion Association Lexicon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), which assigns them to 8 emotions (eg, anger, joy, etc) and 2 sentiments (postive and negative). I create a new variable, positivity, which is the difference between the positive and negative sentiments.
 
 ```r
 sentiments <- sapply(textdata, function(x) get_nrc_sentiment(as.character(x)))
@@ -163,7 +158,7 @@ sentiments <-
     mutate(positivity = positive - negative)
 ```
 
-And here are the emotions expressed in these tweets:
+Here are the emotions expressed in these tweets:
 
 ```r
 emotions <- data.frame("count"=colSums(sentiments[,c(1:8)]))
@@ -237,7 +232,7 @@ load('data/tweets.RData')
 
 ## Principal Component Analysis
 
-I'll now perform a principal component analysis on the tweet data set and join the information (first 5 components) to the original status array. This will allow me to reduce the number of paramaters to consider. That is, rather than considering each word individually, I can consider the linear combination of all words with appropriate loading factors that effectively group them by phrases.
+I'll now perform a principal component analysis on the tweet data set and join the first 5 components to the original status array. This will allow me to reduce the number of paramaters to consider. That is, rather than considering each word individually, I can consider the linear combination of all words with appropriate loading factors that effectively group them by phrases.
 
 ```r
 trans <- preProcess(tweets[,2:ncol(tweets)], method=c("pca"), thresh = 0.95)
@@ -437,43 +432,44 @@ tweet_check(statuses$text, statuses$PC2, 10) %>% kable(format='html')
 <tbody>
   <tr>
    <td style="text-align:left;"> (-4.36,-3.67] </td>
-   <td style="text-align:left;"> You won't need an Xbox to play Microsoft's next generation of games - CNET: Microsoft will bring games to… https://t.co/RBKOFOO4WO |Cnet </td>
+   <td style="text-align:left;"> You won't need an Xbox to play the next generation of Microsoft games - CNET: Microsoft will bring its games… https://t.co/wcXr4cbSDm |Cnet </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (-3.67,-2.99] </td>
-   <td style="text-align:left;"> You won’t need an Xbox to play Microsoft’s next generation of games – CNET https://t.co/MTiNFAPoaj </td>
+   <td style="text-align:left;"> You won't need an Xbox to play Microsoft's next generation of games https://t.co/BjA8WogLe5 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (-2.99,-2.3] </td>
-   <td style="text-align:left;"> You won't need an Xbox to play Microsoft's next generation ...   https://t.co/UMKXPtMODE [https://t.co/0j0RONeotm]&amp;lt;-Promo Code </td>
+   <td style="text-align:left;"> WORLD | You won't need an Xbox to play Microsoft's next generation of games | Read: https://t.co/iRMVb4pf52 via Yahoo!© News </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (-2.3,-1.62] </td>
-   <td style="text-align:left;"> Have to say Steve Ballmer is really redeeming himself. I once compared him to Comic Sans but he's getting better  https://t.co/v8yO2jwnru </td>
+   <td style="text-align:left;"> @MoiMarkus Have you tried Office Lens? https://t.co/9Cydi5kP77 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (-1.62,-0.933] </td>
-   <td style="text-align:left;"> Use #SAS Add-in for Microsoft Office to query data &amp;amp; run stored processes. Free webinar 3/3 #AsktheExpert #SASusers https://t.co/vMaa6pMbzu </td>
+   <td style="text-align:left;"> Telstra offers 200GB free Microsoft OneDrive storage https://t.co/DuGr5ig3mf </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (-0.933,-0.248] </td>
-   <td style="text-align:left;"> New on #MVA: Get Swaying! Microsoft Sway In Education https://t.co/Ax2D2KfBBp #Free #Training </td>
+   <td style="text-align:left;"> AppOfTheDay:&quot;Voice Record+&quot;, a #WindowsPhone #App NOW FREE! on #AppDeals &amp;gt;&amp;gt; https://t.co/TWV12YmN6I https://t.co/5C4cstEpaw </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (-0.248,0.436] </td>
-   <td style="text-align:left;"> @MightyPupil @CreatineAvenger @Microsoft @surface you could not be more wrong let my Kool Aid tell you </td>
+   <td style="text-align:left;"> Measuring and evaluating visual desirability; how to measure visual appeal of a design or website: https://t.co/5WzVykYjEH </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (0.436,1.12] </td>
-   <td style="text-align:left;"> Microsoft Invites Devs to Tinker With HoloLens https://t.co/nhR4z906rT </td>
+   <td style="text-align:left;"> Microsoft Beijing Accelerator 7th Batch Demo Day - BEIJING, March BEIJING, March 1, 2016 /PRNewswire/  .. https://t.co/pVugdeujWa #microsoft </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (1.12,1.8] </td>
-   <td style="text-align:left;"> Introducing first ever experiences for the Microsoft HoloLens Development Edition https://t.co/SHVizqcQCG  #hololens #augmentedreality #vr </td>
+   <td style="text-align:left;"> Microsoft's Hololens is up for pre-order, here's hoping you can expense it https://t.co/00w3rl7R8R </td>
   </tr>
   <tr>
    <td style="text-align:left;"> (1.8,2.5] </td>
-   <td style="text-align:left;"> First Hololens kit to cost $3,000: Microsoft starts taking orders for the developers' edition of its Hololens ... https://t.co/qCT6WrtvVW </td>
+   <td style="text-align:left;"> @zippylab Microsoft announces HoloLens specs, preorder dates, and what's in the Developer Edition
+https://t.co/3fTvtH44ko via neowin </td>
   </tr>
 </tbody>
 </table>
@@ -539,7 +535,7 @@ alldata <- inner_join(userinfo, newstatuses, by='user')
 
 ### Setup
 
-As described above, high and low values for the 2nd principal component appears to be related to a user's tweeting about the Xbox or Hololens. As such, I'll select it for my predictive analysis. This can readily be changed to another principal component, or the results of the sentiment analysis, for other studies.
+As described above, high and low values for the 2nd principal component appear to be related to a user's tweeting about the Xbox or Hololens. As such, I'll select it for my predictive analysis. This can readily be changed to another principal component, or the results of the sentiment analysis, for other studies.
 
 ```r
 possiblepreds <- c('PC1','PC2','PC3','PC4','PC5')
@@ -774,7 +770,7 @@ All models perform comparably similar with regards to the RMSE. As I discuss bel
 ## Summary
 
 I have looked at tweets concerning microsoft and have identified that the second principal component (PC2) appears to be relevant to sorting tweets by whether or not they are excited about the Hololens product or Xbox games on their personal computers. 
-While in principle, there are a lot of tweets and variations, I choose to use PC2 as a measure of the phrases used and developed a set of models to attempt to predict what values of PC2 a user would have. 
+While in principle, there are a lot of tweets and variations, I chose to use PC2 as a measure of the phrases used and developed a set of models to attempt to predict what values of PC2 a user would have. 
 
 This approach can be useful to determine what types of users are excited about the Hololens and which are excited about Xbox games (in this example) and can suggest targetted advertizing.
 
@@ -788,7 +784,7 @@ fancyRpartPlot(final_tree, palettes=c("Blues"), sub='')
 
 The above suggests that users with very negative PC2 values (associated with excitement about the Xbox product) also have very few followers and have been on Twitter a very small amount of time. This suggest these types of users are actually Twitter robot accounts created to spam advertisement on this particular Xbox news story. I would argue it's safe to disregard spending any advertising efforts on these users.
 
-On the other hand, for higher PC2 values (associated with excitement about the Hololens product), we can see more meaningful information. The value of PC2 for a user depends on the postivity, which is a measure on how often positive and negative words are used; the number of statuses or tweets they've had; the number of lists they follow; and the number of favorites they have.
+On the other hand, for higher PC2 values (associated with excitement about the Hololens product), we can see more meaningful information. The value of PC2 for a user depends on the postivity, which is a measure on how often positive and negative words are used; the number of statuses or tweets they've had; the number of lists they follow; and the number of Twitter favorites they have.
 
 While these models can predict the values of PC2, their errors remain fairly large. I interpret this as the PC2 value having large variation in terms of the word choices used to construct the individual tweets.
 A possible way to improve these models would be to consider more parameters given that we have enough data to support this. These additional parameters could come from twitter or from external sources.
@@ -798,3 +794,10 @@ Yet another possibility would be to consider a different API, such as gathering 
 ## Conclusions
 
 In the end, while this project demonstrated a potential relationship between word choice and differentiation between Microsoft products, it can readily be expanded to any other topic of interest. However, given the varied nature of tweeted topics within a search, it is not always clear that a trend can or will emerge.
+
+Alternative ways in which Twitter data could be used include:
+
+ * Examining trends of stock market prices with respect to word choices or overall sentiment in Twitter
+ * Determining what properties of a tweet or user make for the most popular tweets in order to best market your product
+ * Comparing two search terms for two separate companies to identify and address any issues or complaints
+ * Exploring tweets by location to find popular venues or events
